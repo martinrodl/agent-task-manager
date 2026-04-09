@@ -33,6 +33,8 @@ export default function SettingsPage() {
   const [error, setError] = useState('')
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({})
+  const [formTesting, setFormTesting] = useState(false)
+  const [formTestResult, setFormTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   async function load() {
     const [pv, bt] = await Promise.all([
@@ -49,12 +51,14 @@ export default function SettingsPage() {
     setForm({ ...EMPTY })
     setEditing('new')
     setError('')
+    setFormTestResult(null)
   }
 
   function openEdit(p: AiProvider) {
     setForm({ name: p.name, provider: p.provider, baseUrl: p.baseUrl ?? '', apiKey: '', model: p.model, isDefault: p.isDefault, enabled: p.enabled })
     setEditing(p.id)
     setError('')
+    setFormTestResult(null)
   }
 
   async function save() {
@@ -92,6 +96,22 @@ export default function SettingsPage() {
         : { ok: false, msg: d.error ?? 'Connection failed' },
     }))
     setTesting(null)
+  }
+
+  async function testFormProvider() {
+    if (!form.model) { setFormTestResult({ ok: false, msg: 'Enter a model name first' }); return }
+    setFormTesting(true)
+    setFormTestResult({ ok: false, msg: 'Testing…' })
+    const res = await fetch('/api/v1/ai/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: form.provider, baseUrl: form.baseUrl || null, apiKey: form.apiKey || null, model: form.model }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setFormTestResult(d.ok
+      ? { ok: true,  msg: `✓ Connected — ${form.model} responded in ${d.latency}ms` }
+      : { ok: false, msg: d.error ?? 'Connection failed' })
+    setFormTesting(false)
   }
 
   const providerLabel = (v: string) => PROVIDERS.find(p => p.value === v)?.label ?? v
@@ -203,9 +223,24 @@ export default function SettingsPage() {
               </div>
 
               {error && <p className="text-sm text-red-600">{error}</p>}
+
+              {formTestResult && (
+                <div className={`text-sm px-3 py-2 rounded-lg ${formTestResult.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {formTestResult.msg}
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button onClick={save} disabled={saving} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                   {saving ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={testFormProvider}
+                  disabled={formTesting}
+                  className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {formTesting ? 'Testing…' : '🔌 Test connection'}
                 </button>
                 <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancel</button>
               </div>
