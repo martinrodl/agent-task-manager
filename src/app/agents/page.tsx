@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Nav } from '@/components/nav'
 import { PROVIDERS } from '@/lib/providers'
 import { fetchJSON } from '@/lib/fetch'
+import { AiAssistButton, type AgentResult } from '@/components/ai-assist'
 
 interface Agent {
   id: string; name: string; description?: string
@@ -182,12 +183,34 @@ export default function AgentsPage() {
               <h1 className="text-xl font-bold text-gray-900">Agents</h1>
               <p className="text-sm text-gray-500 mt-0.5">Configure LLM backends that auto-process tasks.</p>
             </div>
-            <button
-              onClick={openNew}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              + New agent
-            </button>
+            <div className="flex gap-2">
+              <AiAssistButton
+                type="agent"
+                onResult={(r: AgentResult) => {
+                  const meta = PROVIDERS.find(p => p.value === r.provider)
+                  setForm(f => ({
+                    ...f,
+                    name:         r.name        ?? f.name,
+                    description:  r.description ?? f.description,
+                    provider:     r.provider    ?? f.provider,
+                    baseUrl:      meta?.urlPlaceholder ?? f.baseUrl,
+                    model:        r.model        ?? f.model,
+                    systemPrompt: r.systemPrompt ?? f.systemPrompt,
+                    maxTokens:    r.maxTokens    ?? f.maxTokens,
+                    temperature:  r.temperature  ?? f.temperature,
+                  }))
+                  setEditing('new')
+                  setError('')
+                  setTimeout(() => document.getElementById('agent-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+                }}
+              />
+              <button
+                onClick={openNew}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                + New agent
+              </button>
+            </div>
           </div>
 
           {/* Form */}

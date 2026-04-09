@@ -5,12 +5,12 @@ import { fetchJSON } from '@/lib/fetch'
 
 interface AiProvider { id: string; name: string; model: string }
 
-// ─── Skill result ──────────────────────────────────────────────────────────────
+// ─── Result types ──────────────────────────────────────────────────────────────
+
 export interface SkillResult {
   name: string; icon: string; description: string; content: string
 }
 
-// ─── Workflow result ───────────────────────────────────────────────────────────
 export interface WorkflowState {
   name: string; label: string; color: string
   isInitial: boolean; isTerminal: boolean; isBlocking: boolean; sortOrder: number
@@ -26,20 +26,57 @@ export interface WorkflowResult {
   transitions: WorkflowTransitionProposal[]
 }
 
-// ─── Props ─────────────────────────────────────────────────────────────────────
-interface Props {
-  type: 'skill' | 'workflow'
-  onResult: (result: SkillResult | WorkflowResult) => void
+export interface AgentResult {
+  name: string; description: string
+  provider: string; model: string
+  systemPrompt: string
+  maxTokens: number; temperature: number
+}
+
+export interface TaskResult {
+  title: string; description: string
+  priority: number   // 0-3
+  context: Record<string, unknown>
+}
+
+// ─── Type map ─────────────────────────────────────────────────────────────────
+
+type ResultMap = {
+  skill:    SkillResult
+  workflow: WorkflowResult
+  agent:    AgentResult
+  task:     TaskResult
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface Props<T extends keyof ResultMap> {
+  type: T
+  onResult: (result: ResultMap[T]) => void
   label?: string
 }
 
-export function AiAssistButton({ type, onResult, label }: Props) {
-  const [open, setOpen]           = useState(false)
-  const [prompt, setPrompt]       = useState('')
-  const [providers, setProviders] = useState<AiProvider[]>([])
+const TITLES: Record<string, string> = {
+  skill:    'Skill Generator',
+  workflow: 'Workflow Generator',
+  agent:    'Agent Generator',
+  task:     'Task Generator',
+}
+
+const PLACEHOLDERS: Record<string, string> = {
+  skill:    'e.g. "Skill for searching GitHub issues and summarizing them"',
+  workflow: 'e.g. "Code review workflow with agent analysis and human approval gate"',
+  agent:    'e.g. "An agent that reviews pull requests and suggests improvements"',
+  task:     'e.g. "Implement dark mode toggle for the settings page"',
+}
+
+export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, label }: Props<T>) {
+  const [open, setOpen]             = useState(false)
+  const [prompt, setPrompt]         = useState('')
+  const [providers, setProviders]   = useState<AiProvider[]>([])
   const [providerId, setProviderId] = useState('')
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -47,7 +84,6 @@ export function AiAssistButton({ type, onResult, label }: Props) {
     fetchJSON<(AiProvider & { enabled?: boolean; isDefault?: boolean })[]>('/api/v1/settings/ai-providers', []).then(d => {
       const list: AiProvider[] = Array.isArray(d) ? d.filter(p => p.enabled !== false) : []
       setProviders(list)
-      // Pre-select default
       const def = (d as (AiProvider & { isDefault?: boolean })[]).find(p => p.isDefault) ?? list[0]
       if (def) setProviderId(def.id)
     })
@@ -75,15 +111,11 @@ export function AiAssistButton({ type, onResult, label }: Props) {
       setLoading(false)
       return
     }
-    onResult(d.result)
+    onResult(d.result as ResultMap[T])
     setOpen(false)
     setPrompt('')
     setLoading(false)
   }
-
-  const placeholder = type === 'skill'
-    ? 'e.g. "Skill for searching GitHub issues and summarizing them"'
-    : 'e.g. "Code review workflow with agent analysis and human approval gate"'
 
   return (
     <div className="relative" ref={ref}>
@@ -93,7 +125,7 @@ export function AiAssistButton({ type, onResult, label }: Props) {
         title="Generate with AI"
       >
         <span>✨</span>
-        <span>{label ?? 'Generate with AI'}</span>
+        <span>{label ?? 'Fill with AI'}</span>
       </button>
 
       {open && (
@@ -101,9 +133,9 @@ export function AiAssistButton({ type, onResult, label }: Props) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-lg">✨</span>
-              <p className="font-semibold text-gray-900">AI {type === 'skill' ? 'Skill' : 'Workflow'} Generator</p>
+              <p className="font-semibold text-gray-900">AI {TITLES[type]}</p>
             </div>
-            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
           </div>
 
           {providers.length === 0 ? (
@@ -126,14 +158,12 @@ export function AiAssistButton({ type, onResult, label }: Props) {
               )}
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Describe what you want
-                </label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Describe what you want</label>
                 <textarea
                   value={prompt}
                   onChange={e => setPrompt(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate() }}
-                  placeholder={placeholder}
+                  placeholder={PLACEHOLDERS[type]}
                   rows={3}
                   autoFocus
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -150,15 +180,9 @@ export function AiAssistButton({ type, onResult, label }: Props) {
                   className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
                 >
                   {loading ? (
-                    <>
-                      <span className="animate-spin">⟳</span>
-                      <span>Generating…</span>
-                    </>
+                    <><span className="animate-spin inline-block">⟳</span><span>Generating…</span></>
                   ) : (
-                    <>
-                      <span>✨</span>
-                      <span>Generate</span>
-                    </>
+                    <><span>✨</span><span>Generate</span></>
                   )}
                 </button>
               </div>

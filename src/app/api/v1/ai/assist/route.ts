@@ -40,6 +40,55 @@ Respond with JSON only — no markdown fences, no prose:
   ]
 }`
 
+const AGENT_PROMPT = (desc: string) => `Generate an AI agent configuration for an agentic task management system.
+
+Description: "${desc}"
+
+Available providers: anthropic, openai, azure, openrouter, ollama, lmstudio, webui, claude-code, custom
+Common models: claude-opus-4-6, claude-sonnet-4-6, gpt-4o, gpt-4o-mini
+
+Rules:
+- name must be lowercase kebab-case (e.g. "code-reviewer"), used as agent ID in workflow states
+- systemPrompt should be detailed — describe the agent's role, how it should approach tasks, what format to respond in
+- temperature 0.1-0.3 for precise/technical tasks, 0.5-0.8 for creative tasks
+- maxTokens: 1024-4096 depending on complexity
+
+Respond with JSON only — no markdown fences, no prose:
+{
+  "name": "kebab-case-name",
+  "description": "one line description of what this agent does",
+  "provider": "openai",
+  "model": "gpt-4o",
+  "systemPrompt": "detailed system prompt for the agent (150-400 words)",
+  "maxTokens": 2048,
+  "temperature": 0.3
+}`
+
+const TASK_PROMPT = (desc: string) => `Generate a task definition for an AI-powered task management system.
+
+Description: "${desc}"
+
+Rules:
+- title: concise action-oriented title (max 80 chars)
+- description: detailed description with acceptance criteria if applicable (Markdown)
+- priority: 0=Low, 1=Medium, 2=High, 3=Critical
+- context: structured JSON metadata the agent will use — include relevant details like repo, branch, file paths, issue numbers, requirements, etc.
+
+Respond with JSON only — no markdown fences, no prose:
+{
+  "title": "Short action-oriented title",
+  "description": "Detailed markdown description with what needs to be done and acceptance criteria",
+  "priority": 1,
+  "context": { "relevant": "metadata", "for": "the agent" }
+}`
+
+const PROMPTS: Record<string, (desc: string) => string> = {
+  skill:    SKILL_PROMPT,
+  workflow: WORKFLOW_PROMPT,
+  agent:    AGENT_PROMPT,
+  task:     TASK_PROMPT,
+}
+
 function parseJSON(raw: string) {
   const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
   try { return JSON.parse(clean) }
@@ -59,8 +108,8 @@ export async function POST(req: NextRequest) {
   if (!body?.type || !body?.prompt) {
     return NextResponse.json({ error: 'type and prompt are required' }, { status: 400 })
   }
-  if (!['skill', 'workflow'].includes(body.type)) {
-    return NextResponse.json({ error: 'type must be skill or workflow' }, { status: 400 })
+  if (!PROMPTS[body.type]) {
+    return NextResponse.json({ error: `type must be one of: ${Object.keys(PROMPTS).join(', ')}` }, { status: 400 })
   }
 
   // Find AI provider (explicit id or default)
@@ -73,8 +122,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No AI provider configured. Go to Settings → AI Providers.' }, { status: 422 })
   }
 
-  const systemPrompt = 'You are an expert AI system designer. Generate precise, structured JSON definitions. Never include explanation, only JSON.'
-  const userPrompt   = body.type === 'skill' ? SKILL_PROMPT(body.prompt) : WORKFLOW_PROMPT(body.prompt)
+  const systemPrompt = 'You are an expert AI system designer. Generate precise, structured JSON definitions. Never include explanation, only valid JSON.'
+  const userPrompt   = PROMPTS[body.type](body.prompt)
 
   let raw: string
   try {

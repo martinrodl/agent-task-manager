@@ -5,8 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { fetchJSON } from '@/lib/fetch'
+import { AiAssistButton, type TaskResult } from '@/components/ai-assist'
 
 interface Workflow { id: string; name: string }
+
+const PRIORITY_LABELS = ['Low', 'Medium', 'High', 'Critical']
 
 function NewTaskForm() {
   const router       = useRouter()
@@ -30,6 +33,17 @@ function NewTaskForm() {
   function validateContext(v: string) {
     try { JSON.parse(v); setContextError(''); return true }
     catch { setContextError('Invalid JSON'); return false }
+  }
+
+  function applyAiResult(r: TaskResult) {
+    if (r.title)       setTitle(r.title)
+    if (r.description) setDescription(r.description)
+    if (r.priority !== undefined) setPriority(String(Math.min(3, Math.max(0, r.priority))))
+    if (r.context && typeof r.context === 'object') {
+      const json = JSON.stringify(r.context, null, 2)
+      setContext(json)
+      validateContext(json)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -64,9 +78,14 @@ function NewTaskForm() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-lg mx-auto">
-        <div className="mb-6">
-          <Link href="/tasks" className="text-sm text-gray-500 hover:text-gray-700">← Tasks</Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-2">New task</h1>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <Link href="/tasks" className="text-sm text-gray-500 hover:text-gray-700">← Tasks</Link>
+            <h1 className="text-2xl font-bold text-gray-900 mt-2">New task</h1>
+          </div>
+          <div className="mt-7">
+            <AiAssistButton type="task" onResult={applyAiResult} />
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
@@ -119,7 +138,16 @@ function NewTaskForm() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Priority
+                {priority !== '0' && (
+                  <span className={`ml-2 text-xs font-normal ${
+                    priority === '3' ? 'text-red-500' : priority === '2' ? 'text-orange-500' : 'text-yellow-600'
+                  }`}>
+                    {PRIORITY_LABELS[Number(priority)]}
+                  </span>
+                )}
+              </label>
               <select
                 value={priority}
                 onChange={e => setPriority(e.target.value)}
