@@ -1,0 +1,171 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { fetchJSON } from '@/lib/fetch'
+
+interface AiProvider { id: string; name: string; model: string }
+
+// ─── Skill result ──────────────────────────────────────────────────────────────
+export interface SkillResult {
+  name: string; icon: string; description: string; content: string
+}
+
+// ─── Workflow result ───────────────────────────────────────────────────────────
+export interface WorkflowState {
+  name: string; label: string; color: string
+  isInitial: boolean; isTerminal: boolean; isBlocking: boolean; sortOrder: number
+}
+export interface WorkflowTransitionProposal {
+  name: string; label: string
+  fromStateName: string; toStateName: string
+  allowedRoles: string[]; requiresComment: boolean
+}
+export interface WorkflowResult {
+  name: string; description: string
+  states: WorkflowState[]
+  transitions: WorkflowTransitionProposal[]
+}
+
+// ─── Props ─────────────────────────────────────────────────────────────────────
+interface Props {
+  type: 'skill' | 'workflow'
+  onResult: (result: SkillResult | WorkflowResult) => void
+  label?: string
+}
+
+export function AiAssistButton({ type, onResult, label }: Props) {
+  const [open, setOpen]           = useState(false)
+  const [prompt, setPrompt]       = useState('')
+  const [providers, setProviders] = useState<AiProvider[]>([])
+  const [providerId, setProviderId] = useState('')
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    fetchJSON<(AiProvider & { enabled?: boolean; isDefault?: boolean })[]>('/api/v1/settings/ai-providers', []).then(d => {
+      const list: AiProvider[] = Array.isArray(d) ? d.filter(p => p.enabled !== false) : []
+      setProviders(list)
+      // Pre-select default
+      const def = (d as (AiProvider & { isDefault?: boolean })[]).find(p => p.isDefault) ?? list[0]
+      if (def) setProviderId(def.id)
+    })
+  }, [open])
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  async function generate() {
+    if (!prompt.trim()) { setError('Describe what you want to generate'); return }
+    setLoading(true); setError('')
+    const res = await fetch('/api/v1/ai/assist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, prompt: prompt.trim(), providerId: providerId || undefined }),
+    })
+    const d = await res.json()
+    if (!res.ok) {
+      setError(d.error ?? 'Generation failed')
+      setLoading(false)
+      return
+    }
+    onResult(d.result)
+    setOpen(false)
+    setPrompt('')
+    setLoading(false)
+  }
+
+  const placeholder = type === 'skill'
+    ? 'e.g. "Skill for searching GitHub issues and summarizing them"'
+    : 'e.g. "Code review workflow with agent analysis and human approval gate"'
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => { setOpen(!open); setError('') }}
+        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+        title="Generate with AI"
+      >
+        <span>✨</span>
+        <span>{label ?? 'Generate with AI'}</span>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 z-50 w-[420px] bg-white border border-gray-200 rounded-xl shadow-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">✨</span>
+              <p className="font-semibold text-gray-900">AI {type === 'skill' ? 'Skill' : 'Workflow'} Generator</p>
+            </div>
+            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+          </div>
+
+          {providers.length === 0 ? (
+            <div className="text-sm text-amber-700 bg-amber-50 rounded-lg p-3">
+              No AI providers configured. <a href="/settings" className="underline font-medium">Go to Settings →</a>
+            </div>
+          ) : (
+            <>
+              {providers.length > 1 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">AI Provider</label>
+                  <select
+                    value={providerId}
+                    onChange={e => setProviderId(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.model})</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Describe what you want
+                </label>
+                <textarea
+                  value={prompt}
+                  onChange={e => setPrompt(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate() }}
+                  placeholder={placeholder}
+                  rows={3}
+                  autoFocus
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              {error && <p className="text-xs text-red-600">{error}</p>}
+
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-400">Ctrl+Enter to generate</p>
+                <button
+                  onClick={generate}
+                  disabled={loading || !prompt.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                >
+                  {loading ? (
+                    <>
+                      <span className="animate-spin">⟳</span>
+                      <span>Generating…</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>✨</span>
+                      <span>Generate</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

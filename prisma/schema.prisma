@@ -1,0 +1,188 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+
+  // Workspace — where agents operate
+  workspaceType   String?  // "local" | "github" | null
+  workspacePath   String?  // local: absolute folder path e.g. /srv/projects/myapp
+  githubRepo      String?  // github: owner/repo e.g. acme/backend
+  githubBranch    String?  @default("main")
+  githubToken     String?  // PAT for private repos (stored encrypted in prod)
+
+  // Webhook — called on every state transition (e.g. to trigger CI/CD or sandbox deployment)
+  webhookUrl      String?  // POST target, receives TaskTransitionEvent JSON
+  webhookSecret   String?  // optional HMAC secret — sent as X-Webhook-Secret header
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  states      WorkflowState[]
+  transitions WorkflowTransition[]
+  tasks       Task[]
+}
+
+model WorkflowState {
+  id         String  @id @default(cuid())
+  workflowId String
+  name       String  // machine name e.g. "PENDING_REVIEW"
+  label      String  // human label e.g. "Waiting for review"
+  color      String  @default("#6B7280")
+  isInitial  Boolean @default(false)
+  isTerminal Boolean @default(false)
+  isBlocking               Boolean @default(false) // HITL checkpoint — agent waits here
+  sortOrder                Int     @default(0)
+  agentId                  String? // auto-assign tasks entering this state to this agent
+  completionTransitionName String? // transition agent should call when their work is done
+
+  workflow        Workflow             @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  fromTransitions WorkflowTransition[] @relation("TransitionFromState")
+  toTransitions   WorkflowTransition[] @relation("TransitionToState")
+  tasks           Task[]
+  fromEvents      TaskEvent[]          @relation("EventFromState")
+  toEvents        TaskEvent[]          @relation("EventToState")
+
+  @@unique([workflowId, name])
+}
+
+model WorkflowTransition {
+  id              String   @id @default(cuid())
+  workflowId      String
+  fromStateId     String
+  toStateId       String
+  name            String   // machine name e.g. "submit_review"
+  label           String   // human label e.g. "Submit for review"
+  allowedRoles    String[] // ["agent", "human", "orchestrator"]
+  requiresComment Boolean  @default(false)
+
+  workflow  Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  fromState WorkflowState @relation("TransitionFromState", fields: [fromStateId], references: [id])
+  toState   WorkflowState @relation("TransitionToState", fields: [toStateId], references: [id])
+
+  @@unique([workflowId, fromStateId, name])
+}
+
+// AI providers used by the admin UI assistant (separate from task-processing agents)
+model AiProvider {
+  id          String   @id @default(cuid())
+  name        String   @unique   // e.g. "Anthropic Claude"
+  provider    String             // anthropic | openai | azure | openrouter | ollama | custom
+  baseUrl     String?            // null = use default for provider
+  apiKey      String?
+  model       String             // e.g. claude-opus-4-6, gpt-4o
+  isDefault   Boolean  @default(false)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Agent {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  provider     String   @default("openai") // openai | azure | openrouter | ollama | lmstudio | webui | custom
+  baseUrl      String
+  apiKey       String?
+  model        String
+  systemPrompt String?
+  maxTokens    Int      @default(2048)
+  temperature  Float    @default(0.7)
+  extraConfig  Json     @default("{}") // e.g. { apiVersion: "2024-02-01" } for Azure
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  skills  AgentSkill[]
+  envVars AgentEnvVar[]
+}
+
+// Reusable skill — a chunk of instructions/tools injected into agent's system prompt
+model Skill {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  icon        String   @default("🔧")
+  content     String   // Markdown instructions injected into system prompt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agents AgentSkill[]
+}
+
+// Secret key / API key / env var — injected as available credentials in agent prompt
+model EnvVar {
+  id          String   @id @default(cuid())
+  key         String   @unique  // e.g. GITHUB_TOKEN, OPENAI_API_KEY
+  value       String            // stored as-is (use vault in prod)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agents AgentEnvVar[]
+}
+
+model AgentSkill {
+  agentId  String
+  skillId  String
+  agent    Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  skill    Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([agentId, skillId])
+}
+
+model AgentEnvVar {
+  agentId  String
+  envVarId String
+  agent    Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  envVar   EnvVar @relation(fields: [envVarId], references: [id], onDelete: Cascade)
+
+  @@id([agentId, envVarId])
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  workflowId  String
+  stateId     String
+  title       String
+  description String?
+  context     Json      @default("{}")
+  result      Json?
+  assignedTo  String?
+  createdBy   String    @default("human")
+  priority    Int       @default(0)
+  dueAt       DateTime?
+  parentId    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workflow Workflow      @relation(fields: [workflowId], references: [id])
+  state    WorkflowState @relation(fields: [stateId], references: [id])
+  parent   Task?         @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks Task[]        @relation("Subtasks")
+  events   TaskEvent[]
+}
+
+model TaskEvent {
+  id          String   @id @default(cuid())
+  taskId      String
+  fromStateId String?
+  toStateId   String?
+  actor       String
+  actorType   String   // "human" | "agent" | "orchestrator"
+  comment     String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  task      Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fromState WorkflowState? @relation("EventFromState", fields: [fromStateId], references: [id])
+  toState   WorkflowState? @relation("EventToState", fields: [toStateId], references: [id])
+}
