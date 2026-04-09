@@ -78,19 +78,18 @@ export default function SettingsPage() {
 
   async function testProvider(p: AiProvider) {
     setTesting(p.id)
-    setTestResult(prev => ({ ...prev, [p.id]: { ok: false, msg: 'Testing…' } }))
-    // Use the AI assist endpoint with a trivial prompt
-    const res = await fetch('/api/v1/ai/assist', {
+    setTestResult(prev => ({ ...prev, [p.id]: { ok: false, msg: 'Testing connection…' } }))
+    const res = await fetch('/api/v1/ai/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'skill', prompt: 'Say hello', providerId: p.id }),
+      body: JSON.stringify({ providerId: p.id }),
     })
-    const d = await res.json()
+    const d = await res.json().catch(() => ({}))
     setTestResult(prev => ({
       ...prev,
-      [p.id]: res.ok
-        ? { ok: true,  msg: `OK — model responded (${p.model})` }
-        : { ok: false, msg: d.error ?? 'Failed' },
+      [p.id]: d.ok
+        ? { ok: true,  msg: `✓ Connected — ${p.model} responded in ${d.latency}ms` }
+        : { ok: false, msg: d.error ?? 'Connection failed' },
     }))
     setTesting(null)
   }

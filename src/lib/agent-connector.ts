@@ -37,8 +37,16 @@ export interface ChatResponse {
 
 // ─── Per-provider URL + headers ──────────────────────────────────────────────
 
+// Default base URLs for known providers — used when baseUrl is not set
+const DEFAULT_BASE: Record<string, string> = {
+  anthropic:  'https://api.anthropic.com',
+  openai:     'https://api.openai.com',
+  openrouter: 'https://openrouter.ai',
+}
+
 function resolveEndpoint(cfg: AgentConfig): { url: string; headers: Record<string, string> } {
-  const base = cfg.baseUrl.replace(/\/$/, '')
+  const raw  = cfg.baseUrl?.trim() || DEFAULT_BASE[cfg.provider] || ''
+  const base = raw.replace(/\/$/, '')
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
 
   switch (cfg.provider) {
@@ -56,7 +64,6 @@ function resolveEndpoint(cfg: AgentConfig): { url: string; headers: Record<strin
       return { url: `${base}/api/v1/chat/completions`, headers }
 
     case 'ollama':
-      // Ollama OpenAI-compatible endpoint (no auth needed for local)
       return { url: `${base}/api/chat`, headers }
 
     case 'openai':
