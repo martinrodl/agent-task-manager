@@ -19,7 +19,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const allowed = ['name', 'provider', 'baseUrl', 'apiKey', 'model', 'isDefault', 'enabled'] as const
   const data: Record<string, unknown> = {}
   for (const k of allowed) {
-    if (k in body) data[k] = body[k] === '' ? null : body[k]
+    if (!(k in body)) continue
+    // Empty apiKey = keep existing (don't overwrite with null)
+    if (k === 'apiKey' && body[k] === '') continue
+    data[k] = body[k] === '' ? null : body[k]
   }
 
   const provider = await prisma.aiProvider.update({ where: { id }, data })
