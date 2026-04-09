@@ -15,9 +15,10 @@ interface Agent {
 interface Skill  { id: string; name: string; icon: string; description?: string }
 interface EnvVar { id: string; key: string; description?: string }
 
+const DEFAULT_PROVIDER = PROVIDERS.find(p => p.value === 'openai')!
 const EMPTY: Omit<Agent, 'id' | 'createdAt'> = {
   name: '', description: '', provider: 'openai',
-  baseUrl: '', apiKey: '', model: '',
+  baseUrl: DEFAULT_PROVIDER.urlPlaceholder, apiKey: '', model: '',
   systemPrompt: '', maxTokens: 2048, temperature: 0.7,
   extraConfig: {}, enabled: true,
 }
@@ -104,6 +105,7 @@ export default function AgentsPage() {
     setForm({ ...EMPTY })
     setEditing('new')
     setError('')
+    setTimeout(() => document.getElementById('agent-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
 
   function openEdit(a: Agent) {
@@ -190,7 +192,7 @@ export default function AgentsPage() {
 
           {/* Form */}
           {editing && (
-            <div className="bg-white border-2 border-blue-200 rounded-xl p-6 mb-6 space-y-4">
+            <div id="agent-form" className="bg-white border-2 border-blue-200 rounded-xl p-6 mb-6 space-y-4">
               <h2 className="font-semibold text-gray-900">{editing === 'new' ? 'New agent' : 'Edit agent'}</h2>
 
               <div className="grid grid-cols-2 gap-4">
