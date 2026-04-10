@@ -20,6 +20,8 @@ interface Task {
   id: string; title: string; description?: string
   assignedTo: string | null; priority: number
   stateId: string; state: State; updatedAt: string; createdAt: string
+  parentId?: string | null
+  _count?: { subtasks: number }
 }
 interface Workflow {
   id: string; name: string
@@ -150,9 +152,11 @@ function ColumnSettings({
 
 function TaskCard({
   task,
+  processing,
   onDragStart,
 }: {
   task: Task
+  processing: boolean
   onDragStart: (taskId: string, fromStateId: string) => void
 }) {
   const priColors = ['#9CA3AF', '#60A5FA', '#F59E0B', '#EF4444']
@@ -170,22 +174,30 @@ function TaskCard({
       <Link
         href={`/tasks/${task.id}`}
         draggable={false}
-        onClick={e => {
-          // Let drag win — suppress navigation if dragging started
-          if ((e.target as HTMLElement).closest('[data-dragging]')) e.preventDefault()
-        }}
-        className="block bg-white border border-gray-200 rounded-lg hover:shadow-md hover:border-gray-300 transition-all group"
-        style={{ borderLeft: `3px solid ${priColor}` }}
+        className={`block border rounded-lg hover:shadow-md transition-all group relative ${
+          processing
+            ? 'bg-blue-50 border-blue-200 hover:border-blue-300'
+            : 'bg-white border-gray-200 hover:border-gray-300'
+        }`}
+        style={{ borderLeft: `3px solid ${processing ? '#3B82F6' : priColor}` }}
       >
         <div className="p-3">
           {/* Top meta */}
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-mono text-gray-400">{task.id.slice(-6).toUpperCase()}</span>
-            {task.state.isBlocking && (
-              <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-medium">
-                REVIEW
-              </span>
-            )}
+            <div className="flex items-center gap-1.5">
+              {processing && (
+                <span className="flex items-center gap-1 text-xs text-blue-600 font-medium">
+                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  Processing
+                </span>
+              )}
+              {task.state.isBlocking && !processing && (
+                <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-medium">
+                  REVIEW
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Title */}
@@ -195,13 +207,20 @@ function TaskCard({
 
           {/* Footer */}
           <div className="flex items-center justify-between mt-3">
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-2 h-2 rounded-full shrink-0"
-                title={priorityLabel(task.priority)}
-                style={{ backgroundColor: priColor }}
-              />
-              <span className="text-xs text-gray-400">{priorityLabel(task.priority)}</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <div
+                  className="w-2 h-2 rounded-full shrink-0"
+                  title={priorityLabel(task.priority)}
+                  style={{ backgroundColor: priColor }}
+                />
+                <span className="text-xs text-gray-400">{priorityLabel(task.priority)}</span>
+              </div>
+              {(task._count?.subtasks ?? 0) > 0 && (
+                <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                  ↳ {task._count!.subtasks}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -233,6 +252,7 @@ function Column({
   tasks,
   workflowId,
   transitions,
+  processingTaskIds,
   onStateUpdated,
   onDragStart,
   onDrop,
@@ -241,6 +261,7 @@ function Column({
   tasks: Task[]
   workflowId: string
   transitions: Transition[]
+  processingTaskIds: Set<string>
   onStateUpdated: (s: State) => void
   onDragStart: (taskId: string, fromStateId: string) => void
   onDrop: (toStateId: string) => void
@@ -317,7 +338,12 @@ function Column({
         onDrop={e => { e.preventDefault(); setDragOver(false); onDrop(state.id) }}
       >
         {tasks.map(task => (
-          <TaskCard key={task.id} task={task} onDragStart={onDragStart} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            processing={processingTaskIds.has(task.id)}
+            onDragStart={onDragStart}
+          />
         ))}
 
         {tasks.length === 0 && (
@@ -345,11 +371,12 @@ export function KanbanBoard({
   filterAssignedTo?: string
   filterPriority?: number
 }) {
-  const [workflow, setWorkflow]     = useState<Workflow | null>(null)
-  const [tasksByState, setByState]  = useState<Record<string, Task[]>>({})
-  const [loading, setLoading]       = useState(true)
-  const [dragState, setDragState]   = useState<DragState | null>(null)
-  const [dropError, setDropError]   = useState('')
+  const [workflow, setWorkflow]        = useState<Workflow | null>(null)
+  const [tasksByState, setByState]     = useState<Record<string, Task[]>>({})
+  const [loading, setLoading]          = useState(true)
+  const [dragState, setDragState]      = useState<DragState | null>(null)
+  const [dropError, setDropError]      = useState('')
+  const [processingTaskIds, setProcessing] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     const [wfRes, tasksRes] = await Promise.all([
@@ -376,6 +403,20 @@ export function KanbanBoard({
     load()
     const es = new EventSource(`/api/v1/stream/tasks?workflowId=${workflowId}`)
     es.addEventListener('task_updated', () => load())
+    es.addEventListener('task_transitioned', (e) => {
+      // Remove from processing when agent finishes
+      try {
+        const d = JSON.parse((e as MessageEvent).data)
+        if (d.taskId) setProcessing(prev => { const s = new Set(prev); s.delete(d.taskId); return s })
+      } catch { /* ignore */ }
+      load()
+    })
+    es.addEventListener('task_processing', (e) => {
+      try {
+        const d = JSON.parse((e as MessageEvent).data)
+        if (d.taskId) setProcessing(prev => new Set([...prev, d.taskId]))
+      } catch { /* ignore */ }
+    })
     return () => es.close()
   }, [load, workflowId])
 
@@ -477,6 +518,7 @@ export function KanbanBoard({
             tasks={filteredByState[state.id] ?? []}
             workflowId={workflowId}
             transitions={workflow.transitions}
+            processingTaskIds={processingTaskIds}
             onStateUpdated={handleStateUpdated}
             onDragStart={(taskId, fromStateId) => setDragState({ taskId, fromStateId })}
             onDrop={handleDrop}

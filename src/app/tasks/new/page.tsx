@@ -15,6 +15,7 @@ function NewTaskForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
+  const parentId = searchParams.get('parentId') ?? ''
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [workflowId, setWorkflowId] = useState(searchParams.get('workflowId') ?? '')
   const [title, setTitle]           = useState('')
@@ -62,6 +63,7 @@ function NewTaskForm() {
         assignedTo:  assignedTo  || undefined,
         priority:    Number(priority),
         context:     JSON.parse(context),
+        parentId:    parentId    || undefined,
       }),
     })
 
@@ -80,8 +82,15 @@ function NewTaskForm() {
       <div className="max-w-lg mx-auto">
         <div className="flex items-start justify-between mb-6">
           <div>
-            <Link href="/tasks" className="text-sm text-gray-500 hover:text-gray-700">← Tasks</Link>
-            <h1 className="text-2xl font-bold text-gray-900 mt-2">New task</h1>
+            <Link href={parentId ? `/tasks/${parentId}` : '/tasks'} className="text-sm text-gray-500 hover:text-gray-700">
+              {parentId ? '← Parent task' : '← Tasks'}
+            </Link>
+            <h1 className="text-2xl font-bold text-gray-900 mt-2">
+              {parentId ? 'New subtask' : 'New task'}
+            </h1>
+            {parentId && (
+              <p className="text-xs text-gray-400 mt-0.5 font-mono">parent: {parentId.slice(-8)}</p>
+            )}
           </div>
           <div className="mt-7">
             <AiAssistButton type="task" onResult={applyAiResult} />

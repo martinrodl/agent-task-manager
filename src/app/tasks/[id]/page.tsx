@@ -7,13 +7,16 @@ import { formatDate, priorityLabel, priorityColor } from '@/lib/utils'
 interface State  { id: string; name: string; label: string; color: string; isBlocking: boolean; isTerminal: boolean; agentId?: string | null }
 interface Transition { name: string; label: string; toState: string; toStateLabel: string; requiresComment: boolean; href: string }
 interface Event  { id: string; fromState?: State; toState?: State; actor: string; actorType: string; comment?: string; createdAt: string }
+interface Subtask { id: string; title: string; state: State; priority: number }
 interface Task   {
   id: string; title: string; description?: string; state: State
   workflow: { id: string; name: string }
   context: Record<string, unknown>; result?: Record<string, unknown>
   assignedTo?: string; createdBy: string; priority: number
+  parentId?: string | null
   createdAt: string; updatedAt: string
   events: Event[]
+  subtasks: Subtask[]
   _links: { availableTransitions: Transition[] }
 }
 
@@ -21,6 +24,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params)
   const [task, setTask]           = useState<Task | null>(null)
   const [loading, setLoading]     = useState(true)
+  const [processing, setProcessing] = useState(false)
   const [transitioning, setTrans] = useState<string | null>(null)
   const [comment, setComment]     = useState('')
   const [activeTransition, setActiveTransition] = useState<Transition | null>(null)
@@ -37,7 +41,31 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     setLoading(false)
   }
 
-  useEffect(() => { loadTask() }, [id])
+  useEffect(() => {
+    loadTask()
+
+    // SSE — live refresh when task transitions or agent starts
+    const es = new EventSource(`/api/v1/stream/tasks`)
+    es.addEventListener('task_processing', (e) => {
+      try {
+        const d = JSON.parse((e as MessageEvent).data)
+        if (d.taskId === id) setProcessing(true)
+      } catch { /* ignore */ }
+    })
+    es.addEventListener('task_transitioned', (e) => {
+      try {
+        const d = JSON.parse((e as MessageEvent).data)
+        if (d.taskId === id) { setProcessing(false); loadTask() }
+      } catch { /* ignore */ }
+    })
+    es.addEventListener('task_updated', (e) => {
+      try {
+        const d = JSON.parse((e as MessageEvent).data)
+        if (d.taskId === id) { setProcessing(false); loadTask() }
+      } catch { /* ignore */ }
+    })
+    return () => es.close()
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function invokeAgent() {
     setInvoking(true)
@@ -192,6 +220,39 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                 </pre>
               </div>
             )}
+
+            {/* Subtasks */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-500">
+                  Subtasks {task.subtasks.length > 0 && <span className="text-gray-400">({task.subtasks.length})</span>}
+                </h3>
+                <Link
+                  href={`/tasks/new?workflowId=${task.workflow.id}&parentId=${task.id}`}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  + Add subtask
+                </Link>
+              </div>
+              {task.subtasks.length === 0 ? (
+                <p className="text-xs text-gray-400">No subtasks yet.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {task.subtasks.map(s => (
+                    <Link
+                      key={s.id}
+                      href={`/tasks/${s.id}`}
+                      className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 transition-colors group"
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.state.color }} />
+                      <span className="text-sm text-gray-800 group-hover:text-blue-700 flex-1 truncate">{s.title}</span>
+                      <span className="text-xs text-gray-400 shrink-0">{s.state.label}</span>
+                      {s.state.isTerminal && <span className="text-xs text-gray-300">✓</span>}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Transitions */}
             {transitions.length > 0 && (
@@ -348,6 +409,17 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             </div>
 
+            {/* Processing indicator */}
+            {processing && (
+              <div className="bg-blue-50 border border-blue-300 rounded-xl p-4 space-y-2 animate-pulse">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+                  <p className="text-xs font-semibold text-blue-800">Agent is working…</p>
+                </div>
+                <p className="text-xs text-blue-600">Page will refresh automatically when done.</p>
+              </div>
+            )}
+
             {/* Process now — shown when current state has an agent */}
             {task.state.agentId && !task.state.isTerminal && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
@@ -357,11 +429,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
                 <p className="text-xs text-blue-700 font-mono">{task.state.agentId}</p>
                 <button
-                  onClick={invokeAgent}
-                  disabled={invoking}
+                  onClick={async () => { setProcessing(true); await invokeAgent() }}
+                  disabled={invoking || processing}
                   className="w-full px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {invoking ? 'Invoking…' : 'Process now'}
+                  {invoking || processing ? 'Processing…' : 'Process now'}
                 </button>
                 {invokeMsg && (
                   <p className={`text-xs ${invokeMsg.includes('invoked') ? 'text-blue-700' : 'text-red-600'}`}>

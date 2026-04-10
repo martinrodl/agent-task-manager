@@ -30,6 +30,10 @@ function fetchFullTask(id: string) {
         take: 20,
         include: { fromState: true, toState: true },
       },
+      subtasks: {
+        include: { state: true },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   })
 }

@@ -13,6 +13,10 @@ import { prisma } from './prisma'
 import { callAgent } from './agent-connector'
 import { executeTransition } from './state-machine'
 import { emitTaskEvent } from './sse'
+import { startTimeoutWatcher } from './timeout-watcher'
+
+// Start background watcher on first agent import (server-side singleton)
+startTimeoutWatcher()
 
 interface AgentOutput {
   transitionName: string
@@ -115,9 +119,14 @@ function parseOutput(raw: string): AgentOutput | null {
 
 // ─── Error reporter ───────────────────────────────────────────────────────────
 
+async function getWorkflowId(taskId: string): Promise<string> {
+  const t = await prisma.task.findUnique({ where: { id: taskId }, select: { workflowId: true } })
+  return t?.workflowId ?? ''
+}
+
 async function recordAgentError(taskId: string, agentName: string, message: string): Promise<void> {
   try {
-    const task = await prisma.task.findUnique({ where: { id: taskId }, select: { workflowId: true } })
+    const workflowId = await getWorkflowId(taskId)
     await prisma.taskEvent.create({
       data: {
         taskId,
@@ -127,14 +136,7 @@ async function recordAgentError(taskId: string, agentName: string, message: stri
         metadata:  { error: true },
       },
     })
-    emitTaskEvent({
-      type:      'task_updated',
-      taskId,
-      taskTitle: '',
-      actor:     agentName,
-      actorType: 'agent',
-      workflowId: task?.workflowId ?? '',
-    })
+    emitTaskEvent({ type: 'task_updated', taskId, taskTitle: '', actor: agentName, actorType: 'agent', workflowId })
   } catch (err) {
     console.error('[agent-runner] Failed to record error event:', err)
   }
@@ -142,6 +144,19 @@ async function recordAgentError(taskId: string, agentName: string, message: stri
 
 export async function runAgent(taskId: string, agentName: string): Promise<void> {
   console.log(`[agent-runner] Starting agent "${agentName}" for task ${taskId}`)
+  const workflowId = await getWorkflowId(taskId)
+  emitTaskEvent({ type: 'task_processing', taskId, taskTitle: '', actor: agentName, actorType: 'agent', workflowId })
+
+  // Record "processing started" so the timeout watcher can detect stuck tasks
+  await prisma.taskEvent.create({
+    data: {
+      taskId,
+      actor:     agentName,
+      actorType: 'agent',
+      comment:   '⚙ Agent processing…',
+      metadata:  { action: 'processing_started' },
+    },
+  }).catch(() => { /* non-critical */ })
 
   // Load agent config + assigned skills + env vars
   const agentConfig = await prisma.agent.findFirst({

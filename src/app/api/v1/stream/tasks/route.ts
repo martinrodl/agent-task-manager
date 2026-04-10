@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
       const listener = (payload: TaskEventPayload) => {
         if (workflowId && payload.workflowId !== workflowId) return
         try {
-          const data = `event: task_updated\ndata: ${JSON.stringify(payload)}\n\n`
+          const eventName = payload.type ?? 'task_updated'
+          const data = `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`
           controller.enqueue(encoder.encode(data))
         } catch {
           // client disconnected

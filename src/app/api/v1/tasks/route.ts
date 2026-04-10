@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
     include: {
       state: true,
       workflow: { select: { id: true, name: true } },
+      _count: { select: { subtasks: true } },
     },
     orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     take: limit,
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       assignedTo:  body.assignedTo ?? null,
       priority:    body.priority ?? 0,
       dueAt:       body.dueAt ? new Date(body.dueAt) : null,
+      parentId:    body.parentId ?? null,
       createdBy:   auth.actor,
     },
   })
