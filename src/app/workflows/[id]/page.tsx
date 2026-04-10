@@ -17,6 +17,7 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
         states:      { orderBy: { sortOrder: 'asc' } },
         transitions: { include: { fromState: true, toState: true } },
         _count:      { select: { tasks: true } },
+        project:     { select: { id: true, name: true } },
       },
     }),
     prisma.task.count({ where: { state: { isBlocking: true } } }),
@@ -31,7 +32,19 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
       <main className="flex-1 overflow-auto">
         <div className="max-w-5xl mx-auto p-8">
           <div className="mb-6">
-            <Link href="/workflows" className="text-sm text-gray-500 hover:text-gray-700">← Workflows</Link>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              {workflow.project ? (
+                <>
+                  <Link href="/projects" className="hover:text-gray-700">Projects</Link>
+                  <span>/</span>
+                  <Link href={`/projects/${workflow.project.id}`} className="hover:text-gray-700">{workflow.project.name}</Link>
+                  <span>/</span>
+                  <span className="text-gray-400">Workflows</span>
+                </>
+              ) : (
+                <Link href="/workflows" className="hover:text-gray-700">← Workflows</Link>
+              )}
+            </div>
             <div className="flex items-center justify-between mt-2">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{workflow.name}</h1>
@@ -61,6 +74,7 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
               agents={agents}
               workflow={{
                 id: workflow.id, name: workflow.name, description: workflow.description ?? '',
+                projectId:     workflow.projectId,
                 workspaceType: workflow.workspaceType,
                 workspacePath: workflow.workspacePath,
                 githubRepo:    workflow.githubRepo,
