@@ -144,6 +144,64 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {},
       },
     },
+    {
+      name: 'create_workflow',
+      description:
+        'Create a complete workflow — name, states, and transitions — in a single call. ' +
+        'Use this when the user asks you to design or generate a new workflow. ' +
+        'States are created in the order provided; the first state marked isInitial becomes the entry point. ' +
+        'Transitions wire states together; reference states by their name field (case-insensitive).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Workflow name, e.g. "Code Review" or "Bug Triage"',
+          },
+          description: {
+            type: 'string',
+            description: 'Short description of what this workflow is for',
+          },
+          states: {
+            type: 'array',
+            description: 'Ordered list of states (columns on the kanban board)',
+            items: {
+              type: 'object',
+              properties: {
+                name:                    { type: 'string',  description: 'Machine name — uppercase, underscores, e.g. PENDING_REVIEW' },
+                label:                   { type: 'string',  description: 'Human-readable label, e.g. "Pending Review"' },
+                color:                   { type: 'string',  description: 'Hex colour, e.g. "#60A5FA"' },
+                isInitial:               { type: 'boolean', description: 'True for the entry state (exactly one)' },
+                isTerminal:              { type: 'boolean', description: 'True for end states — no further transitions allowed' },
+                isBlocking:              { type: 'boolean', description: 'True for human-in-the-loop checkpoints — task waits for human action' },
+                sortOrder:               { type: 'number',  description: 'Column order on kanban (0-based, auto-assigned if omitted)' },
+                agentId:                 { type: 'string',  description: 'Name of the agent auto-invoked when a task enters this state' },
+                completionTransitionName: { type: 'string', description: 'Transition the agent calls when done, e.g. "complete"' },
+                stateInstructions:       { type: 'string',  description: 'Extra instructions injected into the agent prompt for this state' },
+              },
+              required: ['name', 'label'],
+            },
+          },
+          transitions: {
+            type: 'array',
+            description: 'Edges between states',
+            items: {
+              type: 'object',
+              properties: {
+                fromStateName:   { type: 'string',  description: 'Source state name (matches states[].name)' },
+                toStateName:     { type: 'string',  description: 'Target state name' },
+                name:            { type: 'string',  description: 'Machine name, e.g. "submit_review"' },
+                label:           { type: 'string',  description: 'Human label, e.g. "Submit for review"' },
+                allowedRoles:    { type: 'array', items: { type: 'string' }, description: 'Who can trigger this: "human", "agent", "orchestrator"' },
+                requiresComment: { type: 'boolean', description: 'Whether a comment is mandatory when triggering this transition' },
+              },
+              required: ['fromStateName', 'toStateName', 'name', 'label'],
+            },
+          },
+        },
+        required: ['name', 'states'],
+      },
+    },
   ],
 }))
 
@@ -204,6 +262,18 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
       case 'list_workflows':
         data = await api('/workflows')
+        break
+
+      case 'create_workflow':
+        data = await api('/workflows/full', {
+          method: 'POST',
+          body: JSON.stringify({
+            name:        args.name,
+            description: args.description ?? undefined,
+            states:      args.states      ?? [],
+            transitions: args.transitions ?? [],
+          }),
+        })
         break
 
       default:
