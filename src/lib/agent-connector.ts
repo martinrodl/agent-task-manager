@@ -44,10 +44,19 @@ const DEFAULT_BASE: Record<string, string> = {
   openrouter: 'https://openrouter.ai',
 }
 
+// Detect if a key was accidentally stored as the masked display value
+function isMasked(key: string | null | undefined): boolean {
+  return !!(key && /^[•*]{4,}$/.test(key))
+}
+
 function resolveEndpoint(cfg: AgentConfig): { url: string; headers: Record<string, string> } {
   const raw  = cfg.baseUrl?.trim() || DEFAULT_BASE[cfg.provider] || ''
   const base = raw.replace(/\/$/, '')
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+
+  if (isMasked(cfg.apiKey)) {
+    throw new Error(`API key for provider "${cfg.provider}" appears to be a masked placeholder. Go to Settings → AI Providers and re-enter the real key.`)
+  }
 
   switch (cfg.provider) {
     case 'azure': {

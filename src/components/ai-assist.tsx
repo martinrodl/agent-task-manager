@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchJSON } from '@/lib/fetch'
 
-interface AiProvider { id: string; name: string; model: string }
+interface AiProvider { id: string; name: string; model: string; provider: string; apiKey: string | null }
 
 // ─── Result types ──────────────────────────────────────────────────────────────
 
@@ -54,6 +54,7 @@ interface Props<T extends keyof ResultMap> {
   type: T
   onResult: (result: ResultMap[T]) => void
   label?: string
+  defaultProviderId?: string
 }
 
 const TITLES: Record<string, string> = {
@@ -70,7 +71,7 @@ const PLACEHOLDERS: Record<string, string> = {
   task:     'e.g. "Implement dark mode toggle for the settings page"',
 }
 
-export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, label }: Props<T>) {
+export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, label, defaultProviderId }: Props<T>) {
   const [open, setOpen]             = useState(false)
   const [prompt, setPrompt]         = useState('')
   const [providers, setProviders]   = useState<AiProvider[]>([])
@@ -84,10 +85,14 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
     fetchJSON<(AiProvider & { enabled?: boolean; isDefault?: boolean })[]>('/api/v1/settings/ai-providers', []).then(d => {
       const list: AiProvider[] = Array.isArray(d) ? d.filter(p => p.enabled !== false) : []
       setProviders(list)
-      const def = (d as (AiProvider & { isDefault?: boolean })[]).find(p => p.isDefault) ?? list[0]
-      if (def) setProviderId(def.id)
+      // Prefer: explicitly passed defaultProviderId > isDefault > first in list
+      const preferred = defaultProviderId
+        ? list.find(p => p.id === defaultProviderId)
+        : (d as (AiProvider & { isDefault?: boolean })[]).find(p => p.isDefault)
+      const sel = preferred ?? list[0]
+      if (sel) setProviderId(sel.id)
     })
-  }, [open])
+  }, [open, defaultProviderId])
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -144,6 +149,17 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
             </div>
           ) : (
             <>
+              {(() => {
+                const sel = providers.find(p => p.id === providerId)
+                const needsKey = sel && ['anthropic','openai','azure','openrouter'].includes(sel.provider)
+                if (needsKey && !sel.apiKey) return (
+                  <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <strong>{sel.name}</strong> has no API key stored.{' '}
+                    <a href="/settings" className="underline font-medium">Go to Settings → AI Providers</a> and re-enter the key.
+                  </div>
+                )
+                return null
+              })()}
               {providers.length > 1 && (
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">AI Provider</label>
@@ -176,7 +192,10 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
                 <p className="text-xs text-gray-400">Ctrl+Enter to generate</p>
                 <button
                   onClick={generate}
-                  disabled={loading || !prompt.trim()}
+                  disabled={loading || !prompt.trim() || (() => {
+                    const sel = providers.find(p => p.id === providerId)
+                    return !!(sel && ['anthropic','openai','azure','openrouter'].includes(sel.provider) && !sel.apiKey)
+                  })()}
                   className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
                 >
                   {loading ? (

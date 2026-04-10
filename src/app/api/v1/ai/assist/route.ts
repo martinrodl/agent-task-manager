@@ -122,6 +122,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No AI provider configured. Go to Settings → AI Providers.' }, { status: 422 })
   }
 
+  const needsKey = ['anthropic', 'openai', 'azure', 'openrouter'].includes(provider.provider)
+  if (needsKey && !provider.apiKey) {
+    return NextResponse.json({
+      error: `Provider "${provider.name}" requires an API key. Go to Settings → AI Providers, edit the provider, and re-enter the API key.`,
+    }, { status: 422 })
+  }
+
   const systemPrompt = 'You are an expert AI system designer. Generate precise, structured JSON definitions. Never include explanation, only valid JSON.'
   const userPrompt   = PROMPTS[body.type](body.prompt)
 

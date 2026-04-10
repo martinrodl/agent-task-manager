@@ -53,7 +53,7 @@ function buildPrompt(task: {
   description?: string | null
   context:      unknown
   result?:      unknown
-  state:        { name: string; label: string; completionTransitionName?: string | null }
+  state:        { name: string; label: string; completionTransitionName?: string | null; stateInstructions?: string | null }
   workspace:    WorkspaceInfo
 }, transitions: { name: string; label: string; toState: { label: string } }[], envVarsSection = ''): string {
   const transitionList = transitions.map(t =>
@@ -80,8 +80,7 @@ ${transitionList || '  (none — task may be in a terminal state)'}
 ${task.state.completionTransitionName
   ? `The preferred completion transition is: "${task.state.completionTransitionName}"`
   : ''}
-${envVarsSection}
-## Instructions
+${envVarsSection}${task.state.stateInstructions ? `## State-specific instructions\n${task.state.stateInstructions}\n\n` : ''}## Instructions
 Perform the task described above. Then respond with a JSON object only — no prose, no markdown fences:
 
 {
@@ -176,6 +175,7 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
         name:                     task.state.name,
         label:                    task.state.label,
         completionTransitionName: task.state.completionTransitionName,
+        stateInstructions:        task.state.stateInstructions,
       },
       workspace: {
         workspaceType: task.workflow.workspaceType,
@@ -193,15 +193,31 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
     { role: 'user'   as const, content: userPrompt   },
   ]
 
+  // Resolve LLM credentials: use linked AI provider if set, otherwise fall back to agent's own fields
+  let llmProvider = agentConfig.provider
+  let llmBaseUrl  = agentConfig.baseUrl ?? ''
+  let llmApiKey   = agentConfig.apiKey
+  let llmModel    = agentConfig.model ?? ''
+
+  if (agentConfig.aiProviderId) {
+    const aiProv = await prisma.aiProvider.findUnique({ where: { id: agentConfig.aiProviderId } })
+    if (aiProv) {
+      llmProvider = aiProv.provider
+      llmBaseUrl  = aiProv.baseUrl ?? ''
+      llmApiKey   = aiProv.apiKey
+      llmModel    = aiProv.model
+    }
+  }
+
   // Call LLM
   let response
   try {
     response = await callAgent(
       {
-        provider:    agentConfig.provider,
-        baseUrl:     agentConfig.baseUrl,
-        apiKey:      agentConfig.apiKey,
-        model:       agentConfig.model,
+        provider:    llmProvider,
+        baseUrl:     llmBaseUrl,
+        apiKey:      llmApiKey,
+        model:       llmModel,
         maxTokens:   agentConfig.maxTokens,
         temperature: agentConfig.temperature,
         extraConfig: {

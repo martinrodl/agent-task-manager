@@ -7,10 +7,13 @@ import { AiAssistButton, type WorkflowResult, type WorkflowTransitionProposal } 
 const PRESET_COLORS = ['#9CA3AF','#60A5FA','#F59E0B','#8B5CF6','#EF4444','#10B981','#F97316','#EC4899']
 const ROLES = ['agent', 'human', 'orchestrator'] as const
 
+interface AgentOption { id: string; name: string; description?: string | null }
+
 interface State {
   id?: string; name: string; label: string; color: string
   isInitial: boolean; isTerminal: boolean; isBlocking: boolean; sortOrder: number
   agentId?: string | null; completionTransitionName?: string | null
+  stateInstructions?: string | null
 }
 interface Transition {
   id?: string; fromStateId: string; toStateId: string
@@ -31,10 +34,12 @@ export function WorkflowBuilder({
   workflow,
   initialStates,
   initialTransitions,
+  agents = [],
 }: {
   workflow: Workflow
   initialStates: State[]
   initialTransitions: Transition[]
+  agents?: AgentOption[]
 }) {
   const router = useRouter()
 
@@ -107,11 +112,12 @@ export function WorkflowBuilder({
   }
 
   // ─── State form ───────────────────────────────────────────
-  const [sForm, setSForm] = useState<State>({ name: '', label: '', color: '#9CA3AF', isInitial: false, isTerminal: false, isBlocking: false, sortOrder: 0 })
+  const SFORM_EMPTY: State = { name: '', label: '', color: '#9CA3AF', isInitial: false, isTerminal: false, isBlocking: false, sortOrder: 0, agentId: null, completionTransitionName: null, stateInstructions: null }
+  const [sForm, setSForm] = useState<State>({ ...SFORM_EMPTY })
   const [editingState, setEditingState] = useState<number | null>(null)
 
   function openNewState() {
-    setSForm({ name: '', label: '', color: '#9CA3AF', isInitial: false, isTerminal: false, isBlocking: false, sortOrder: states.length })
+    setSForm({ ...SFORM_EMPTY, sortOrder: states.length })
     setEditingState(-1)
   }
 
@@ -424,18 +430,54 @@ export function WorkflowBuilder({
               )}
 
               {editingState === i ? (
-                <div className="flex-1 grid grid-cols-6 gap-2 items-center">
-                  <input value={sForm.name}  onChange={e => setSForm(f => ({ ...f, name: e.target.value }))}  placeholder="NAME" className="col-span-1 px-2 py-1 border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                  <input value={sForm.label} onChange={e => setSForm(f => ({ ...f, label: e.target.value }))} placeholder="Label" className="col-span-2 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                  <div className="flex gap-1 flex-wrap col-span-2">
-                    {PRESET_COLORS.map(c => <button key={c} onClick={() => setSForm(f => ({ ...f, color: c }))} className={`w-5 h-5 rounded-full border-2 ${sForm.color === c ? 'border-gray-800' : 'border-transparent'}`} style={{ backgroundColor: c }} />)}
+                <div className="flex-1 space-y-2">
+                  <div className="grid grid-cols-6 gap-2 items-center">
+                    <input value={sForm.name}  onChange={e => setSForm(f => ({ ...f, name: e.target.value }))}  placeholder="NAME" className="col-span-1 px-2 py-1 border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <input value={sForm.label} onChange={e => setSForm(f => ({ ...f, label: e.target.value }))} placeholder="Label" className="col-span-2 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <div className="flex gap-1 flex-wrap col-span-2">
+                      {PRESET_COLORS.map(c => <button key={c} onClick={() => setSForm(f => ({ ...f, color: c }))} className={`w-5 h-5 rounded-full border-2 ${sForm.color === c ? 'border-gray-800' : 'border-transparent'}`} style={{ backgroundColor: c }} />)}
+                    </div>
+                    <div className="flex flex-col gap-1 text-xs">
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={sForm.isInitial}  onChange={e => setSForm(f => ({ ...f, isInitial: e.target.checked }))}  /> Initial</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={sForm.isTerminal} onChange={e => setSForm(f => ({ ...f, isTerminal: e.target.checked }))} /> Terminal</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={sForm.isBlocking} onChange={e => setSForm(f => ({ ...f, isBlocking: e.target.checked }))} /> HITL 🔒</label>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1 text-xs">
-                    <label className="flex items-center gap-1"><input type="checkbox" checked={sForm.isInitial}  onChange={e => setSForm(f => ({ ...f, isInitial: e.target.checked }))}  /> Initial</label>
-                    <label className="flex items-center gap-1"><input type="checkbox" checked={sForm.isTerminal} onChange={e => setSForm(f => ({ ...f, isTerminal: e.target.checked }))} /> Terminal</label>
-                    <label className="flex items-center gap-1"><input type="checkbox" checked={sForm.isBlocking} onChange={e => setSForm(f => ({ ...f, isBlocking: e.target.checked }))} /> HITL 🔒</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Agent</label>
+                      <select
+                        value={sForm.agentId ?? ''}
+                        onChange={e => setSForm(f => ({ ...f, agentId: e.target.value || null }))}
+                        className="w-full px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">— none —</option>
+                        {agents.map(a => <option key={a.id} value={a.name}>{a.name}{a.description ? ` — ${a.description}` : ''}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Completion transition</label>
+                      <input
+                        value={sForm.completionTransitionName ?? ''}
+                        onChange={e => setSForm(f => ({ ...f, completionTransitionName: e.target.value || null }))}
+                        placeholder="e.g. complete"
+                        className="w-full px-2 py-1 border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
-                  <div className="col-span-6 flex gap-2">
+                  {sForm.agentId && (
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">State instructions <span className="text-gray-400">(injected into agent prompt for this state)</span></label>
+                      <textarea
+                        value={sForm.stateInstructions ?? ''}
+                        onChange={e => setSForm(f => ({ ...f, stateInstructions: e.target.value || null }))}
+                        rows={3}
+                        placeholder="e.g. Focus on reviewing code quality and test coverage. Output a structured JSON report."
+                        className="w-full px-2 py-1.5 border rounded text-xs resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
                     <button onClick={saveState} className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">Save</button>
                     <button onClick={() => setEditingState(null)} className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
                   </div>
@@ -451,8 +493,13 @@ export function WorkflowBuilder({
                       {s.isTerminal && <span className="ml-1 text-xs bg-gray-100  text-gray-600  px-1 rounded">terminal</span>}
                       {s.isBlocking && <span className="ml-1 text-xs bg-purple-100 text-purple-700 px-1 rounded">HITL</span>}
                       {s.agentId && (
-                        <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1 rounded font-mono">
+                        <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono">
                           🤖 {s.agentId}
+                        </span>
+                      )}
+                      {s.stateInstructions && (
+                        <span className="ml-1 text-xs bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded" title={s.stateInstructions}>
+                          📝 instructions
                         </span>
                       )}
                       {!s.id        && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1 rounded">unsaved</span>}
@@ -492,6 +539,59 @@ export function WorkflowBuilder({
                 <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={sForm.isTerminal} onChange={e => setSForm(f => ({ ...f, isTerminal: e.target.checked }))} className="rounded" /> Terminal state</label>
                 <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={sForm.isBlocking} onChange={e => setSForm(f => ({ ...f, isBlocking: e.target.checked }))} className="rounded" /> HITL checkpoint 🔒</label>
               </div>
+
+              {/* Agent assignment */}
+              <div className="border-t border-gray-100 pt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">🤖 Agent <span className="font-normal text-gray-400">— auto-invoked when task enters this state</span></label>
+                    <select
+                      value={sForm.agentId ?? ''}
+                      onChange={e => setSForm(f => ({ ...f, agentId: e.target.value || null }))}
+                      className="w-full px-2 py-1.5 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">— no agent —</option>
+                      {agents.map(a => (
+                        <option key={a.id} value={a.name}>
+                          {a.name}{a.description ? ` — ${a.description}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {agents.length === 0 && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        No agents configured. <a href="/agents" className="text-blue-600 hover:underline">Create one →</a>
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Completion transition</label>
+                    <input
+                      value={sForm.completionTransitionName ?? ''}
+                      onChange={e => setSForm(f => ({ ...f, completionTransitionName: e.target.value || null }))}
+                      placeholder="e.g. complete"
+                      className="w-full px-2 py-1.5 border rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-0.5">Transition the agent should call when done.</p>
+                  </div>
+                </div>
+
+                {sForm.agentId && (
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">
+                      State instructions
+                      <span className="ml-1 font-normal text-gray-400">— injected into the agent prompt specifically for this state</span>
+                    </label>
+                    <textarea
+                      value={sForm.stateInstructions ?? ''}
+                      onChange={e => setSForm(f => ({ ...f, stateInstructions: e.target.value || null }))}
+                      rows={4}
+                      placeholder={`e.g. You are reviewing a pull request.\nFocus on: code quality, test coverage, security issues.\nReturn a structured JSON report with fields: summary, issues[], severity.`}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2">
                 <button onClick={saveState} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">Add state</button>
                 <button onClick={() => setEditingState(null)} className="px-3 py-1.5 text-sm text-gray-500">Cancel</button>

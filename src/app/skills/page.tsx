@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Nav } from '@/components/nav'
 import { AiAssistButton, type SkillResult } from '@/components/ai-assist'
 import { fetchJSON } from '@/lib/fetch'
+import { SKILL_TEMPLATES, TEMPLATE_CATEGORIES } from '@/lib/skill-templates'
 
 interface Skill  { id: string; name: string; description?: string; icon: string; content: string }
 interface EnvVar { id: string; key: string; value: string; description?: string }
@@ -23,6 +24,7 @@ export default function SkillsPage() {
   const [sEditing, setSEditing]     = useState<string | null>(null)
   const [sSaving, setSSaving]       = useState(false)
   const [sError, setSError]         = useState('')
+  const [templateCat, setTemplateCat] = useState<string>('all')
 
   // Env vars
   const [envVars, setEnvVars]       = useState<EnvVar[]>([])
@@ -118,29 +120,95 @@ export default function SkillsPage() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <p className="text-sm text-gray-500">Skills are injected as extra instructions into the agent's system prompt.</p>
-                <div className="flex gap-2">
-                  <AiAssistButton
-                    type="skill"
-                    onResult={r => {
-                      const s = r as SkillResult
-                      setSForm({ name: s.name, description: s.description ?? '', icon: s.icon ?? '🔧', content: s.content })
-                      setSEditing('new')
-                      setSError('')
-                    }}
-                  />
-                  <button
-                    onClick={() => { setSForm({ ...SKILL_EMPTY }); setSEditing('new'); setSError('') }}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-                  >
-                    + New skill
-                  </button>
-                </div>
+                <button
+                  onClick={() => { setSForm({ ...SKILL_EMPTY }); setSEditing('new'); setSError('') }}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                >
+                  + New skill
+                </button>
               </div>
+
+              {/* Template picker — shown when no form open */}
+              {!sEditing && (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700">⚡ Start from template</p>
+                    <div className="flex gap-1 flex-wrap justify-end">
+                      <button
+                        onClick={() => setTemplateCat('all')}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors
+                          ${templateCat === 'all' ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-300 text-gray-500 hover:border-gray-500'}`}
+                      >
+                        All
+                      </button>
+                      {TEMPLATE_CATEGORIES.map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => setTemplateCat(cat)}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors
+                            ${templateCat === cat ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-300 text-gray-500 hover:border-gray-500'}`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {SKILL_TEMPLATES
+                      .filter(t => templateCat === 'all' || t.category === templateCat)
+                      .map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setSForm({ name: t.name, description: t.description, icon: t.icon, content: t.content })
+                            setSEditing('new')
+                            setSError('')
+                          }}
+                          className="flex items-start gap-2.5 p-3 text-left bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:shadow-sm transition-all group"
+                        >
+                          <span className="text-xl mt-0.5 shrink-0">{t.icon}</span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm font-medium text-gray-900 group-hover:text-blue-700 truncate">{t.name}</span>
+                              {t.free
+                                ? <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">free</span>
+                                : <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">paid</span>
+                              }
+                            </div>
+                            <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{t.description}</p>
+                            {t.envVarHints.length > 0 && (
+                              <p className="text-[10px] text-gray-400 mt-1">
+                                Needs: {t.envVarHints.map(h => h.key).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    }
+                  </div>
+                </div>
+              )}
 
               {/* Skill form */}
               {sEditing && (
                 <div className="bg-white border-2 border-blue-200 rounded-xl p-5 space-y-4">
-                  <h3 className="font-semibold text-gray-900">{sEditing === 'new' ? 'New skill' : 'Edit skill'}</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">{sEditing === 'new' ? 'New skill' : 'Edit skill'}</h3>
+                    <AiAssistButton
+                      type="skill"
+                      onResult={r => {
+                        const s = r as SkillResult
+                        setSForm(f => ({
+                          ...f,
+                          ...(s.name        ? { name: s.name }               : {}),
+                          ...(s.description ? { description: s.description } : {}),
+                          ...(s.icon        ? { icon: s.icon }               : {}),
+                          ...(s.content     ? { content: s.content }         : {}),
+                        }))
+                        setSError('')
+                      }}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Name <span className="text-red-500">*</span></label>
@@ -189,6 +257,31 @@ export default function SkillsPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                  {/* Env var hints from template */}
+                  {(() => {
+                    const tpl = SKILL_TEMPLATES.find(t => t.name === sForm.name)
+                    if (!tpl || tpl.envVarHints.length === 0) return null
+                    return (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 space-y-1">
+                        <p className="text-xs font-medium text-amber-800">🔑 Required API keys</p>
+                        {tpl.envVarHints.map(h => (
+                          <p key={h.key} className="text-xs text-amber-700">
+                            <code className="font-mono bg-amber-100 px-1 rounded">{h.key}</code>
+                            {' — '}{h.description}
+                            {tpl.setupUrl && (
+                              <a href={tpl.setupUrl} target="_blank" rel="noreferrer" className="ml-1 underline hover:text-amber-900">Get key →</a>
+                            )}
+                          </p>
+                        ))}
+                        <p className="text-xs text-amber-600 mt-1">
+                          Add these in{' '}
+                          <button onClick={() => setTab('envvars')} className="underline font-medium">API Keys & Env Vars tab</button>
+                          {' '}and assign them to the agent.
+                        </p>
+                      </div>
+                    )
+                  })()}
+
                   {sError && <p className="text-sm text-red-600">{sError}</p>}
                   <div className="flex gap-2">
                     <button onClick={saveSkill} disabled={sSaving} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">

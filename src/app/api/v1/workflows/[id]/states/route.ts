@@ -48,7 +48,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (auth.actorType !== 'human') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
-  const body: { id?: string; name: string; label: string; color?: string; isInitial?: boolean; isTerminal?: boolean; isBlocking?: boolean; sortOrder?: number }[] = await req.json()
+  const body: {
+    id?: string; name: string; label: string; color?: string
+    isInitial?: boolean; isTerminal?: boolean; isBlocking?: boolean; sortOrder?: number
+    agentId?: string | null; completionTransitionName?: string | null; stateInstructions?: string | null
+  }[] = await req.json()
 
   // Upsert each state
   const result = await prisma.$transaction(
@@ -58,10 +62,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
         update: {
           label: s.label,
           color: s.color ?? '#6B7280',
-          isInitial:  s.isInitial  ?? false,
-          isTerminal: s.isTerminal ?? false,
-          isBlocking: s.isBlocking ?? false,
-          sortOrder:  s.sortOrder  ?? i,
+          isInitial:               s.isInitial  ?? false,
+          isTerminal:              s.isTerminal ?? false,
+          isBlocking:              s.isBlocking ?? false,
+          sortOrder:               s.sortOrder  ?? i,
+          agentId:                 s.agentId                 ?? null,
+          completionTransitionName: s.completionTransitionName ?? null,
+          stateInstructions:       s.stateInstructions       ?? null,
         },
         create: {
           workflowId:  id,
@@ -72,6 +79,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
           isTerminal:  s.isTerminal ?? false,
           isBlocking:  s.isBlocking ?? false,
           sortOrder:   s.sortOrder  ?? i,
+          agentId:                 s.agentId                 ?? null,
+          completionTransitionName: s.completionTransitionName ?? null,
+          stateInstructions:       s.stateInstructions       ?? null,
         },
       })
     )
@@ -91,7 +101,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!stateId) return NextResponse.json({ error: 'stateId required' }, { status: 400 })
 
   const body = await req.json().catch(() => ({}))
-  const allowed = ['label', 'color', 'isInitial', 'isTerminal', 'isBlocking', 'sortOrder', 'agentId', 'completionTransitionName'] as const
+  const allowed = ['label', 'color', 'isInitial', 'isTerminal', 'isBlocking', 'sortOrder', 'agentId', 'completionTransitionName', 'stateInstructions'] as const
   const data: Record<string, unknown> = {}
   for (const k of allowed) {
     if (k in body) data[k] = body[k] === '' ? null : body[k]

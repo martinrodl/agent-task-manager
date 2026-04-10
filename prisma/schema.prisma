@@ -43,6 +43,7 @@ model WorkflowState {
   sortOrder                Int     @default(0)
   agentId                  String? // auto-assign tasks entering this state to this agent
   completionTransitionName String? // transition agent should call when their work is done
+  stateInstructions        String? // extra instructions injected into agent prompt for this specific state
 
   workflow        Workflow             @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   fromTransitions WorkflowTransition[] @relation("TransitionFromState")
@@ -83,16 +84,21 @@ model AiProvider {
   enabled     Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  agents Agent[]
 }
 
 model Agent {
   id           String   @id @default(cuid())
   name         String   @unique
   description  String?
-  provider     String   @default("openai") // openai | azure | openrouter | ollama | lmstudio | webui | custom
-  baseUrl      String
+  // LLM credentials — either via aiProviderId (recommended) or manual fields below
+  aiProviderId String?
+  aiProvider   AiProvider? @relation(fields: [aiProviderId], references: [id], onDelete: SetNull)
+  provider     String   @default("openai")
+  baseUrl      String?  // nullable: only used when aiProviderId is null
   apiKey       String?
-  model        String
+  model        String?  // nullable: only used when aiProviderId is null
   systemPrompt String?
   maxTokens    Int      @default(2048)
   temperature  Float    @default(0.7)

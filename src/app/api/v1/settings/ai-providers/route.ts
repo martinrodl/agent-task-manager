@@ -26,12 +26,16 @@ export async function POST(req: NextRequest) {
     await prisma.aiProvider.updateMany({ where: { isDefault: true }, data: { isDefault: false } })
   }
 
+  // Trim, and reject masked placeholder values
+  const rawKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
+  const apiKeyToStore = (!rawKey || /^[•*]{4,}$/.test(rawKey)) ? null : rawKey
+
   const provider = await prisma.aiProvider.create({
     data: {
       name:      body.name,
       provider:  body.provider,
       baseUrl:   body.baseUrl   || null,
-      apiKey:    body.apiKey    || null,
+      apiKey:    apiKeyToStore,
       model:     body.model,
       isDefault: body.isDefault ?? false,
       enabled:   body.enabled   ?? true,

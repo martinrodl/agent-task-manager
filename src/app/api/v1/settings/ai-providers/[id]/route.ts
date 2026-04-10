@@ -20,8 +20,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const data: Record<string, unknown> = {}
   for (const k of allowed) {
     if (!(k in body)) continue
-    // Empty apiKey = keep existing (don't overwrite with null)
-    if (k === 'apiKey' && body[k] === '') continue
+    // Empty or masked apiKey = keep existing (don't overwrite)
+    if (k === 'apiKey') {
+      const trimmed = typeof body[k] === 'string' ? body[k].trim() : ''
+      if (!trimmed || /^[•*]{4,}$/.test(trimmed)) continue
+      data[k] = trimmed
+      continue
+    }
     data[k] = body[k] === '' ? null : body[k]
   }
 

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function WorkflowDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const [workflow, blocking] = await Promise.all([
+  const [workflow, blocking, agents] = await Promise.all([
     prisma.workflow.findUnique({
       where: { id },
       include: {
@@ -20,6 +20,7 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
       },
     }),
     prisma.task.count({ where: { state: { isBlocking: true } } }),
+    prisma.agent.findMany({ where: { enabled: true }, select: { id: true, name: true, description: true }, orderBy: { name: 'asc' } }),
   ])
 
   if (!workflow) notFound()
@@ -57,6 +58,7 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="font-semibold text-gray-900 mb-4">Configure workflow</h2>
             <WorkflowBuilder
+              agents={agents}
               workflow={{
                 id: workflow.id, name: workflow.name, description: workflow.description ?? '',
                 workspaceType: workflow.workspaceType,
@@ -67,7 +69,14 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
                 webhookUrl:    workflow.webhookUrl,
                 webhookSecret: workflow.webhookSecret,
               }}
-              initialStates={workflow.states}
+              initialStates={workflow.states.map(s => ({
+                id: s.id, name: s.name, label: s.label, color: s.color,
+                isInitial: s.isInitial, isTerminal: s.isTerminal, isBlocking: s.isBlocking,
+                sortOrder: s.sortOrder,
+                agentId:                 s.agentId,
+                completionTransitionName: s.completionTransitionName,
+                stateInstructions:       s.stateInstructions,
+              }))}
               initialTransitions={workflow.transitions.map(t => ({
                 id:             t.id,
                 fromStateId:    t.fromStateId,

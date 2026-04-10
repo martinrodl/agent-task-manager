@@ -1,14 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Nav } from '@/components/nav'
 import { PROVIDERS } from '@/lib/providers'
 import { fetchJSON } from '@/lib/fetch'
 import { AiAssistButton, type AgentResult } from '@/components/ai-assist'
 
+interface AiProviderOption { id: string; name: string; model: string; provider: string }
 interface Agent {
   id: string; name: string; description?: string
-  provider: string; baseUrl: string; apiKey?: string; model: string
+  aiProviderId?: string
+  aiProvider?: AiProviderOption | null
+  provider: string; baseUrl?: string; apiKey?: string; model?: string
   systemPrompt?: string; maxTokens: number; temperature: number
   extraConfig: Record<string, unknown>; enabled: boolean
   createdAt: string
@@ -16,17 +19,24 @@ interface Agent {
 interface Skill  { id: string; name: string; icon: string; description?: string }
 interface EnvVar { id: string; key: string; description?: string }
 
-const DEFAULT_PROVIDER = PROVIDERS.find(p => p.value === 'openai')!
-const EMPTY: Omit<Agent, 'id' | 'createdAt'> = {
-  name: '', description: '', provider: 'openai',
-  baseUrl: DEFAULT_PROVIDER.urlPlaceholder, apiKey: '', model: '',
+const EMPTY = {
+  name: '', description: '',
+  aiProviderId: '',           // preferred: link to a Settings AI provider
+  // manual fallback fields (only used when aiProviderId is empty)
+  provider: 'openai', baseUrl: '', apiKey: '', model: '',
   systemPrompt: '', maxTokens: 2048, temperature: 0.7,
-  extraConfig: {}, enabled: true,
+  extraConfig: {} as Record<string, unknown>, enabled: true,
+  skillIds: [] as string[],
 }
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [reviewCount, setReviewCount] = useState(0)
+  const [aiProviders, setAiProviders] = useState<AiProviderOption[]>([])
+  const [showManual, setShowManual] = useState(false)
+  const [skillSearch, setSkillSearch] = useState('')
+  const [skillDropOpen, setSkillDropOpen] = useState(false)
+  const skillRef = useRef<HTMLDivElement>(null)
   const [form, setForm] = useState<typeof EMPTY>({ ...EMPTY })
   const [editing, setEditing] = useState<string | null>(null)  // agent id or 'new'
   const [saving, setSaving] = useState(false)
@@ -45,16 +55,18 @@ export default function AgentsPage() {
   const [assigning, setAssigning]   = useState(false)
 
   async function load() {
-    const [ag, bt, sk, ev] = await Promise.all([
+    const [ag, bt, sk, ev, pv] = await Promise.all([
       fetchJSON<Agent[]>('/api/v1/agents', []),
       fetchJSON<{ total: number }>('/api/v1/tasks?blocking=true&limit=0', { total: 0 }),
       fetchJSON<Skill[]>('/api/v1/skills', []),
       fetchJSON<EnvVar[]>('/api/v1/envvars', []),
+      fetchJSON<(AiProviderOption & { enabled?: boolean })[]>('/api/v1/settings/ai-providers', []),
     ])
     setAgents(Array.isArray(ag) ? ag : [])
     setReviewCount(bt.total ?? 0)
     setAllSkills(Array.isArray(sk) ? sk : [])
     setAllEnvVars(Array.isArray(ev) ? ev : [])
+    setAiProviders(Array.isArray(pv) ? pv.filter(p => p.enabled !== false) : [])
   }
 
   useEffect(() => { load() }, [])
@@ -103,21 +115,38 @@ export default function AgentsPage() {
   }
 
   function openNew() {
-    setForm({ ...EMPTY })
+    // Pre-select default AI provider if available
+    const defProv = aiProviders.find(p => (p as AiProviderOption & { isDefault?: boolean }).isDefault) ?? aiProviders[0]
+    setForm({ ...EMPTY, aiProviderId: defProv?.id ?? '' })
+    setShowManual(false)
+    setSkillSearch('')
+    setSkillDropOpen(false)
     setEditing('new')
     setError('')
     setTimeout(() => document.getElementById('agent-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
 
-  function openEdit(a: Agent) {
+  async function openEdit(a: Agent) {
+    // Load existing skills for this agent if not already loaded
+    let skillIds: string[] = agentSkills[a.id] ?? []
+    if (agentSkills[a.id] === undefined) {
+      const sk = await fetchJSON<Skill[]>(`/api/v1/agents/${a.id}/skills`, [])
+      skillIds = (sk as Skill[]).map(s => s.id)
+      setAgentSkills(prev => ({ ...prev, [a.id]: skillIds }))
+    }
     setForm({
       name: a.name, description: a.description ?? '',
-      provider: a.provider, baseUrl: a.baseUrl,
-      apiKey: a.apiKey ?? '', model: a.model,
+      aiProviderId: a.aiProviderId ?? '',
+      provider: a.provider, baseUrl: a.baseUrl ?? '',
+      apiKey: '', model: a.model ?? '',
       systemPrompt: a.systemPrompt ?? '',
       maxTokens: a.maxTokens, temperature: a.temperature,
       extraConfig: a.extraConfig, enabled: a.enabled,
+      skillIds,
     })
+    setShowManual(!a.aiProviderId)
+    setSkillSearch('')
+    setSkillDropOpen(false)
     setEditing(a.id)
     setError('')
   }
@@ -129,12 +158,13 @@ export default function AgentsPage() {
     const url   = isNew ? '/api/v1/agents' : `/api/v1/agents/${editing}`
     const method = isNew ? 'POST' : 'PATCH'
 
+    const { skillIds: _skillIds, ...formData } = form
     const body = {
-      ...form,
-      apiKey:      form.apiKey     || null,
-      description: form.description || null,
-      systemPrompt: form.systemPrompt || null,
-      extraConfig: form.extraConfig,
+      ...formData,
+      apiKey:       formData.apiKey       || null,
+      description:  formData.description  || null,
+      systemPrompt: formData.systemPrompt || null,
+      extraConfig:  formData.extraConfig,
     }
 
     const res = await fetch(url, {
@@ -144,6 +174,14 @@ export default function AgentsPage() {
     })
 
     if (res.ok) {
+      const saved = await res.json()
+      // Save skills assignment
+      await fetch(`/api/v1/agents/${saved.id}/skills`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillIds: form.skillIds }),
+      })
+      setAgentSkills(prev => ({ ...prev, [saved.id]: form.skillIds }))
       await load()
       setEditing(null)
     } else {
@@ -183,40 +221,34 @@ export default function AgentsPage() {
               <h1 className="text-xl font-bold text-gray-900">Agents</h1>
               <p className="text-sm text-gray-500 mt-0.5">Configure LLM backends that auto-process tasks.</p>
             </div>
-            <div className="flex gap-2">
-              <AiAssistButton
-                type="agent"
-                onResult={(r: AgentResult) => {
-                  const meta = PROVIDERS.find(p => p.value === r.provider)
-                  setForm(f => ({
-                    ...f,
-                    name:         r.name        ?? f.name,
-                    description:  r.description ?? f.description,
-                    provider:     r.provider    ?? f.provider,
-                    baseUrl:      meta?.urlPlaceholder ?? f.baseUrl,
-                    model:        r.model        ?? f.model,
-                    systemPrompt: r.systemPrompt ?? f.systemPrompt,
-                    maxTokens:    r.maxTokens    ?? f.maxTokens,
-                    temperature:  r.temperature  ?? f.temperature,
-                  }))
-                  setEditing('new')
-                  setError('')
-                  setTimeout(() => document.getElementById('agent-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-                }}
-              />
-              <button
-                onClick={openNew}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                + New agent
-              </button>
-            </div>
+            <button
+              onClick={openNew}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              + New agent
+            </button>
           </div>
 
           {/* Form */}
           {editing && (
             <div id="agent-form" className="bg-white border-2 border-blue-200 rounded-xl p-6 mb-6 space-y-4">
-              <h2 className="font-semibold text-gray-900">{editing === 'new' ? 'New agent' : 'Edit agent'}</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-gray-900">{editing === 'new' ? 'New agent' : 'Edit agent'}</h2>
+                <AiAssistButton
+                  type="agent"
+                  defaultProviderId={form.aiProviderId || undefined}
+                  onResult={(r: AgentResult) => {
+                    setForm(f => ({
+                      ...f,
+                      ...(r.name        ? { name: r.name }               : {}),
+                      ...(r.description ? { description: r.description } : {}),
+                      ...(r.systemPrompt ? { systemPrompt: r.systemPrompt } : {}),
+                      ...(r.maxTokens   ? { maxTokens: r.maxTokens }     : {}),
+                      ...(r.temperature !== undefined ? { temperature: r.temperature } : {}),
+                    }))
+                  }}
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -240,70 +272,93 @@ export default function AgentsPage() {
                 </div>
               </div>
 
-              {/* Provider + URL */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+              {/* AI Model selection */}
+              <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                <label className="block text-xs font-medium text-gray-600">AI Model <span className="text-red-500">*</span></label>
+                {aiProviders.length === 0 ? (
+                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    No AI providers configured. <a href="/settings" className="underline font-medium">Go to Settings →</a>
+                  </p>
+                ) : (
                   <select
-                    value={form.provider}
-                    onChange={e => {
-                      const meta = PROVIDERS.find(p => p.value === e.target.value)
-                      setForm(f => ({ ...f, provider: e.target.value, baseUrl: meta?.urlPlaceholder ?? f.baseUrl }))
-                    }}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.aiProviderId}
+                    onChange={e => setForm(f => ({ ...f, aiProviderId: e.target.value }))}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   >
-                    {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                    <option value="">— Custom (manual) —</option>
+                    {aiProviders.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} · {p.model}</option>
+                    ))}
                   </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Base URL <span className="text-red-500">*</span></label>
-                  <input
-                    value={form.baseUrl}
-                    onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value }))}
-                    placeholder={providerMeta(form.provider)?.urlPlaceholder ?? 'https://...'}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                )}
+                {form.aiProviderId ? (
+                  <p className="text-xs text-gray-400">API key and endpoint are managed in <a href="/settings" className="text-blue-600 hover:underline">Settings → AI Providers</a>.</p>
+                ) : (
+                  <button type="button" onClick={() => setShowManual(v => !v)} className="text-xs text-blue-600 hover:underline">
+                    {showManual ? '▲ Hide manual fields' : '▼ Show manual fields'}
+                  </button>
+                )}
               </div>
 
-              {/* Model + API key */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Model <span className="text-red-500">*</span>
-                    {form.provider === 'azure' && <span className="ml-1 text-gray-400">(deployment name)</span>}
-                  </label>
-                  <input
-                    value={form.model}
-                    onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
-                    placeholder={form.provider === 'azure' ? 'my-gpt4-deployment' : 'gpt-4o-mini'}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    API Key {providerMeta(form.provider)?.needsKey && <span className="text-red-500">*</span>}
-                  </label>
-                  <input
-                    type="password"
-                    value={form.apiKey}
-                    onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))}
-                    placeholder={providerMeta(form.provider)?.needsKey ? 'sk-...' : 'optional'}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Azure api-version */}
-              {form.provider === 'azure' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">API Version</label>
-                  <input
-                    value={(form.extraConfig.apiVersion as string) ?? ''}
-                    onChange={e => setForm(f => ({ ...f, extraConfig: { ...f.extraConfig, apiVersion: e.target.value } }))}
-                    placeholder="2024-02-01"
-                    className="w-48 px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+              {/* Manual fields — shown when no aiProviderId selected */}
+              {!form.aiProviderId && showManual && (
+                <div className="space-y-4 border border-dashed border-gray-300 rounded-lg p-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+                      <select
+                        value={form.provider}
+                        onChange={e => {
+                          const meta = PROVIDERS.find(p => p.value === e.target.value)
+                          setForm(f => ({ ...f, provider: e.target.value, baseUrl: meta?.urlPlaceholder ?? f.baseUrl }))
+                        }}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Base URL</label>
+                      <input
+                        value={form.baseUrl}
+                        onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value }))}
+                        placeholder={providerMeta(form.provider)?.urlPlaceholder ?? 'https://...'}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Model <span className="text-red-500">*</span></label>
+                      <input
+                        value={form.model}
+                        onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
+                        placeholder="gpt-4o-mini"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">API Key</label>
+                      <input
+                        type="password"
+                        value={form.apiKey}
+                        onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))}
+                        placeholder="sk-..."
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  {form.provider === 'azure' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">API Version</label>
+                      <input
+                        value={(form.extraConfig.apiVersion as string) ?? ''}
+                        onChange={e => setForm(f => ({ ...f, extraConfig: { ...f.extraConfig, apiVersion: e.target.value } }))}
+                        placeholder="2024-02-01"
+                        className="w-48 px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -352,6 +407,79 @@ export default function AgentsPage() {
                 />
               </div>
 
+              {/* Skills autocomplete multi-select */}
+              <div ref={skillRef}>
+                <label className="block text-xs font-medium text-gray-600 mb-1">🔧 Skills</label>
+                {allSkills.length === 0 ? (
+                  <p className="text-xs text-gray-400">No skills defined yet. <a href="/skills" className="text-blue-600 hover:underline">Create skills →</a></p>
+                ) : (
+                  <div className="relative">
+                    {/* Selected tags + input */}
+                    <div
+                      className="min-h-[36px] flex flex-wrap gap-1.5 px-2 py-1.5 border border-gray-300 rounded-lg bg-white cursor-text focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500"
+                      onClick={() => { setSkillDropOpen(true); (skillRef.current?.querySelector('input') as HTMLInputElement | null)?.focus() }}
+                    >
+                      {form.skillIds.map(id => {
+                        const s = allSkills.find(x => x.id === id)
+                        if (!s) return null
+                        return (
+                          <span key={id} className="flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-md">
+                            <span>{s.icon}</span>
+                            <span>{s.name}</span>
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); setForm(f => ({ ...f, skillIds: f.skillIds.filter(i => i !== id) })) }}
+                              className="ml-0.5 text-blue-500 hover:text-blue-800 leading-none"
+                            >×</button>
+                          </span>
+                        )
+                      })}
+                      <input
+                        type="text"
+                        value={skillSearch}
+                        onChange={e => { setSkillSearch(e.target.value); setSkillDropOpen(true) }}
+                        onFocus={() => setSkillDropOpen(true)}
+                        onBlur={() => setTimeout(() => setSkillDropOpen(false), 150)}
+                        placeholder={form.skillIds.length === 0 ? 'Search and add skills…' : ''}
+                        className="flex-1 min-w-[120px] text-sm outline-none bg-transparent placeholder-gray-400"
+                      />
+                    </div>
+
+                    {/* Dropdown */}
+                    {skillDropOpen && (() => {
+                      const q = skillSearch.toLowerCase()
+                      const options = allSkills.filter(s =>
+                        !form.skillIds.includes(s.id) &&
+                        (s.name.toLowerCase().includes(q) || (s.description ?? '').toLowerCase().includes(q))
+                      )
+                      if (options.length === 0) return null
+                      return (
+                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {options.map(s => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => {
+                                setForm(f => ({ ...f, skillIds: [...f.skillIds, s.id] }))
+                                setSkillSearch('')
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-blue-50 transition-colors"
+                            >
+                              <span className="text-base">{s.icon}</span>
+                              <div>
+                                <span className="font-medium text-gray-900">{s.name}</span>
+                                {s.description && <span className="ml-2 text-gray-400 text-xs">{s.description}</span>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
+              </div>
+
               {error && <p className="text-sm text-red-600">{error}</p>}
 
               <div className="flex gap-2 pt-1">
@@ -396,14 +524,22 @@ export default function AgentsPage() {
                             {!a.enabled && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">disabled</span>}
                           </div>
                           {a.description && <p className="text-sm text-gray-500 mt-0.5">{a.description}</p>}
-                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
-                            <span className="font-mono truncate max-w-[200px]">{a.baseUrl}</span>
-                            <span>·</span>
-                            <span className="font-mono">{a.model}</span>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                            {a.aiProvider ? (
+                              <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-medium">
+                                {a.aiProvider.name} · {a.aiProvider.model}
+                              </span>
+                            ) : (
+                              <>
+                                <span className="font-mono truncate max-w-[160px]">{a.baseUrl}</span>
+                                <span>·</span>
+                                <span className="font-mono">{a.model}</span>
+                              </>
+                            )}
                             <span>·</span>
                             <span>temp {a.temperature}</span>
                             <span>·</span>
-                            <span>{a.maxTokens} tokens</span>
+                            <span>{a.maxTokens} tok</span>
                           </div>
                         </div>
                       </div>
