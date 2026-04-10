@@ -44,6 +44,8 @@ model WorkflowState {
   agentId                  String? // auto-assign tasks entering this state to this agent
   completionTransitionName String? // transition agent should call when their work is done
   stateInstructions        String? // extra instructions injected into agent prompt for this specific state
+  spawnWorkflowId          String? // when task enters this state, spawn child tasks from task.result into this workflow
+  spawnTransitionName      String? // transition to call on parent task after spawning (e.g. "done")
 
   workflow        Workflow             @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   fromTransitions WorkflowTransition[] @relation("TransitionFromState")

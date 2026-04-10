@@ -184,7 +184,126 @@ export async function executeTransition(
     })
   }
 
+  // Auto-spawn child tasks if this is a spawn state
+  if (transition.toState.spawnWorkflowId && updatedTask.result) {
+    setImmediate(() =>
+      spawnChildTasks(
+        updatedTask,
+        transition.toState.spawnWorkflowId!,
+        transition.toState.spawnTransitionName ?? null,
+        actor,
+        actorType,
+      ).catch(err => console.error('[state-machine] spawn error:', err))
+    )
+  }
+
   return { task: full, event: { id: event.id, createdAt: event.createdAt } }
+}
+
+// ─── Spawn child tasks from task.result ──────────────────────────────────────
+
+interface SpawnTaskSpec {
+  title: string
+  description?: string
+  priority?: number
+  context?: Record<string, unknown>
+  assignedTo?: string
+}
+
+async function spawnChildTasks(
+  parentTask: { id: string; workflowId: string; title: string; result: unknown },
+  spawnWorkflowId: string,
+  spawnTransitionName: string | null,
+  actor: string,
+  actorType: ActorType,
+) {
+  // Parse task specs from result — accepts { tasks: [...] } or direct array
+  let specs: SpawnTaskSpec[] = []
+  try {
+    const r = parentTask.result as Record<string, unknown>
+    if (Array.isArray(r)) {
+      specs = r as SpawnTaskSpec[]
+    } else if (r && Array.isArray(r.tasks)) {
+      specs = r.tasks as SpawnTaskSpec[]
+    } else {
+      console.warn('[spawn] result is not a task spec array — nothing to spawn')
+      return
+    }
+  } catch {
+    console.warn('[spawn] could not parse result for spawning')
+    return
+  }
+
+  if (specs.length === 0) return
+
+  const targetInitialState = await prisma.workflowState.findFirst({
+    where: { workflowId: spawnWorkflowId, isInitial: true },
+  })
+  if (!targetInitialState) {
+    console.error(`[spawn] target workflow ${spawnWorkflowId} has no initial state`)
+    return
+  }
+
+  for (const spec of specs) {
+    if (!spec.title) continue
+    const child = await prisma.task.create({
+      data: {
+        workflowId:  spawnWorkflowId,
+        stateId:     targetInitialState.id,
+        title:       spec.title,
+        description: spec.description ?? null,
+        priority:    spec.priority ?? 0,
+        context:     (spec.context ?? {}) as object,
+        assignedTo:  spec.assignedTo ?? (targetInitialState.agentId ?? null),
+        parentId:    parentTask.id,
+        createdBy:   actor,
+      },
+    })
+
+    await prisma.taskEvent.create({
+      data: {
+        taskId:    child.id,
+        toStateId: targetInitialState.id,
+        actor,
+        actorType,
+        metadata:  { action: 'created', spawnedFromTaskId: parentTask.id },
+      },
+    })
+
+    emitTaskEvent({
+      type:       'task_created',
+      taskId:     child.id,
+      taskTitle:  child.title,
+      toState:    targetInitialState.name,
+      actor,
+      actorType,
+      workflowId: spawnWorkflowId,
+    })
+
+    // Auto-invoke agent if initial state has one configured
+    if (targetInitialState.agentId) {
+      setImmediate(() => {
+        runAgent(child.id, targetInitialState.agentId!).catch(err =>
+          console.error('[spawn] agent-runner error:', err)
+        )
+      })
+    }
+  }
+
+  // Transition parent task after spawning (e.g. to "spawned" / "done")
+  if (spawnTransitionName) {
+    try {
+      await executeTransition(
+        parentTask.id,
+        spawnTransitionName,
+        actor,
+        actorType,
+        `Spawned ${specs.length} task(s) into workflow ${spawnWorkflowId}`,
+      )
+    } catch (err) {
+      console.error('[spawn] post-spawn transition failed:', err)
+    }
+  }
 }
 
 // ─── Build task response with HATEOAS links ───────────────────────────────────

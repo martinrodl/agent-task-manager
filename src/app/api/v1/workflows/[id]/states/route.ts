@@ -52,6 +52,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     id?: string; name: string; label: string; color?: string
     isInitial?: boolean; isTerminal?: boolean; isBlocking?: boolean; sortOrder?: number
     agentId?: string | null; completionTransitionName?: string | null; stateInstructions?: string | null
+    spawnWorkflowId?: string | null; spawnTransitionName?: string | null
   }[] = await req.json()
 
   // Upsert each state
@@ -69,6 +70,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
           agentId:                 s.agentId                 ?? null,
           completionTransitionName: s.completionTransitionName ?? null,
           stateInstructions:       s.stateInstructions       ?? null,
+          spawnWorkflowId:         s.spawnWorkflowId         ?? null,
+          spawnTransitionName:     s.spawnTransitionName     ?? null,
         },
         create: {
           workflowId:  id,
@@ -82,6 +85,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
           agentId:                 s.agentId                 ?? null,
           completionTransitionName: s.completionTransitionName ?? null,
           stateInstructions:       s.stateInstructions       ?? null,
+          spawnWorkflowId:         s.spawnWorkflowId         ?? null,
+          spawnTransitionName:     s.spawnTransitionName     ?? null,
         },
       })
     )
@@ -101,7 +106,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!stateId) return NextResponse.json({ error: 'stateId required' }, { status: 400 })
 
   const body = await req.json().catch(() => ({}))
-  const allowed = ['label', 'color', 'isInitial', 'isTerminal', 'isBlocking', 'sortOrder', 'agentId', 'completionTransitionName', 'stateInstructions'] as const
+  const allowed = ['label', 'color', 'isInitial', 'isTerminal', 'isBlocking', 'sortOrder', 'agentId', 'completionTransitionName', 'stateInstructions', 'spawnWorkflowId', 'spawnTransitionName'] as const
   const data: Record<string, unknown> = {}
   for (const k of allowed) {
     if (k in body) data[k] = body[k] === '' ? null : body[k]

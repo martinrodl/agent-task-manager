@@ -1465,6 +1465,69 @@ fetch(url, {
 - Log the URL and status code for debugging
 - Never hardcode secrets — always read from environment variables`,
   },
+
+  // ── Orchestration ─────────────────────────────────────────────────────────────
+
+  {
+    id: 'orchestrator',
+    category: 'Orchestration',
+    name: 'orchestrator',
+    icon: '🎯',
+    description: 'Spawn child tasks into another workflow based on analysis results',
+    free: true,
+    envVarHints: [],
+    content: `## Orchestrator — Task Spawning
+
+You are an orchestrator agent. Your job is to analyse the current task and produce a structured list of sub-tasks that should be created in another workflow.
+
+### When to use this skill
+
+This skill applies when the current task's **state** has a "Spawn into workflow" configured. After you call the completion transition, AgentTask will automatically read your \`result\` and create the child tasks you defined.
+
+### Output format
+
+Your \`result\` JSON **must** contain a \`tasks\` array. Each element:
+
+\`\`\`json
+{
+  "tasks": [
+    {
+      "title": "Short imperative title",
+      "description": "Detailed description of what needs to be done",
+      "priority": 1,
+      "context": {
+        "source": "Research summary here",
+        "requirements": ["req1", "req2"]
+      }
+    }
+  ]
+}
+\`\`\`
+
+### Priority values
+
+| Value | Meaning |
+|-------|---------|
+| 0     | Low     |
+| 1     | Medium  |
+| 2     | High    |
+| 3     | Critical |
+
+### Guidelines
+
+1. **Be specific** — each task title must be a clear, actionable instruction (e.g. "Implement OAuth login" not "Auth work")
+2. **Right size** — each task should be completable in 1-4 hours of agent work; split large tasks
+3. **Include context** — the \`context\` field is passed to the implementing agent; include relevant snippets, requirements, and constraints
+4. **Ordered** — list tasks in logical implementation order when there are dependencies
+5. **No duplicates** — check the existing backlog before creating similar tasks
+
+### Transition flow
+
+After analysis:
+1. Call \`transition_task\` with your completion transition name
+2. Set \`result\` to the JSON structure above
+3. AgentTask will create all child tasks automatically and (optionally) advance the parent task`,
+  },
 ]
 
 export const TEMPLATE_CATEGORIES = [...new Set(SKILL_TEMPLATES.map(t => t.category))]

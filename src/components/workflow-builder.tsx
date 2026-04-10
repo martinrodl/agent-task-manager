@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AiAssistButton, type WorkflowResult, type WorkflowTransitionProposal } from '@/components/ai-assist'
 
@@ -8,12 +8,14 @@ const PRESET_COLORS = ['#9CA3AF','#60A5FA','#F59E0B','#8B5CF6','#EF4444','#10B98
 const ROLES = ['agent', 'human', 'orchestrator'] as const
 
 interface AgentOption { id: string; name: string; description?: string | null }
+interface WorkflowOption { id: string; name: string }
 
 interface State {
   id?: string; name: string; label: string; color: string
   isInitial: boolean; isTerminal: boolean; isBlocking: boolean; sortOrder: number
   agentId?: string | null; completionTransitionName?: string | null
   stateInstructions?: string | null
+  spawnWorkflowId?: string | null; spawnTransitionName?: string | null
 }
 interface Transition {
   id?: string; fromStateId: string; toStateId: string
@@ -54,6 +56,14 @@ export function WorkflowBuilder({
   const [webhookSecret, setWebhookSecret] = useState(workflow.webhookSecret ?? '')
   const [states, setStates]           = useState<State[]>(initialStates)
   const [transitions, setTransitions] = useState<Transition[]>(initialTransitions)
+  const [allWorkflows, setAllWorkflows] = useState<WorkflowOption[]>([])
+
+  // Fetch all workflows for the spawn-workflow dropdown
+  useEffect(() => {
+    fetch('/api/v1/workflows').then(r => r.json()).then((data: WorkflowOption[]) => {
+      if (Array.isArray(data)) setAllWorkflows(data.filter(w => w.id !== workflow.id))
+    }).catch(() => {})
+  }, [])
   const [tab, setTab]                 = useState<'states' | 'transitions'>('states')
   const [saving, setSaving]           = useState(false)
   const [msg, setMsg]                 = useState('')
@@ -112,7 +122,7 @@ export function WorkflowBuilder({
   }
 
   // ─── State form ───────────────────────────────────────────
-  const SFORM_EMPTY: State = { name: '', label: '', color: '#9CA3AF', isInitial: false, isTerminal: false, isBlocking: false, sortOrder: 0, agentId: null, completionTransitionName: null, stateInstructions: null }
+  const SFORM_EMPTY: State = { name: '', label: '', color: '#9CA3AF', isInitial: false, isTerminal: false, isBlocking: false, sortOrder: 0, agentId: null, completionTransitionName: null, stateInstructions: null, spawnWorkflowId: null, spawnTransitionName: null }
   const [sForm, setSForm] = useState<State>({ ...SFORM_EMPTY })
   const [editingState, setEditingState] = useState<number | null>(null)
 
@@ -477,6 +487,30 @@ export function WorkflowBuilder({
                       />
                     </div>
                   )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Spawn into workflow</label>
+                      <select
+                        value={sForm.spawnWorkflowId ?? ''}
+                        onChange={e => setSForm(f => ({ ...f, spawnWorkflowId: e.target.value || null }))}
+                        className="w-full px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">— none —</option>
+                        {allWorkflows.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      </select>
+                    </div>
+                    {sForm.spawnWorkflowId && (
+                      <div>
+                        <label className="text-xs text-gray-500 mb-0.5 block">Post-spawn transition</label>
+                        <input
+                          value={sForm.spawnTransitionName ?? ''}
+                          onChange={e => setSForm(f => ({ ...f, spawnTransitionName: e.target.value || null }))}
+                          placeholder="e.g. done"
+                          className="w-full px-2 py-1 border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <button onClick={saveState} className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">Save</button>
                     <button onClick={() => setEditingState(null)} className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
@@ -500,6 +534,11 @@ export function WorkflowBuilder({
                       {s.stateInstructions && (
                         <span className="ml-1 text-xs bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded" title={s.stateInstructions}>
                           📝 instructions
+                        </span>
+                      )}
+                      {s.spawnWorkflowId && (
+                        <span className="ml-1 text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">
+                          ⚡ spawn
                         </span>
                       )}
                       {!s.id        && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1 rounded">unsaved</span>}
@@ -590,6 +629,42 @@ export function WorkflowBuilder({
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Spawn orchestration */}
+              <div className="border-t border-gray-100 pt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-gray-700">⚡ Orchestration spawn</h3>
+                  <span className="text-xs text-gray-400">— when task enters this state, spawn child tasks into another workflow</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Spawn into workflow</label>
+                    <select
+                      value={sForm.spawnWorkflowId ?? ''}
+                      onChange={e => setSForm(f => ({ ...f, spawnWorkflowId: e.target.value || null }))}
+                      className="w-full px-2 py-1.5 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">— no spawn —</option>
+                      {allWorkflows.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Reads <code className="bg-gray-100 px-1 rounded">task.result</code> as <code className="bg-gray-100 px-1 rounded">{"{ tasks: [{title, description, priority}] }"}</code> and creates them.
+                    </p>
+                  </div>
+                  {sForm.spawnWorkflowId && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">Post-spawn transition <span className="font-normal text-gray-400">(optional)</span></label>
+                      <input
+                        value={sForm.spawnTransitionName ?? ''}
+                        onChange={e => setSForm(f => ({ ...f, spawnTransitionName: e.target.value || null }))}
+                        placeholder="e.g. done"
+                        className="w-full px-2 py-1.5 border rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-xs text-gray-400 mt-0.5">Transition to call on the parent task after spawning.</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2">
