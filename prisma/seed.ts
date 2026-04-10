@@ -131,6 +131,123 @@ async function main() {
     },
   })
 
+  // ─── Workflow 3: AgentTask Development ────────────────────────────────
+  // This workflow is used to develop AgentTask itself using AgentTask.
+  // Claude Code (via MCP) picks up tasks from the backlog, implements them,
+  // and submits for human review before merging.
+  const devWorkflow = await prisma.workflow.create({
+    data: {
+      name: 'AgentTask Development',
+      description: 'Self-management workflow — use this to build AgentTask with AgentTask. Claude Code picks tasks, implements them, and submits a PR for review.',
+    },
+  })
+
+  const [dBacklog, dPlanning, dInProgress, dReview, dChanges, dApproved, dDone, dWontFix] =
+    await Promise.all([
+      prisma.workflowState.create({ data: { workflowId: devWorkflow.id, name: 'BACKLOG',          label: 'Backlog',           color: '#9CA3AF', isInitial: true, sortOrder: 0 } }),
+      prisma.workflowState.create({ data: { workflowId: devWorkflow.id, name: 'PLANNING',         label: 'Planning',          color: '#60A5FA', sortOrder: 1,
+        stateInstructions: 'Read the task carefully. Think through the implementation approach, identify which files need to change, and write a short plan as your comment. Then transition to in_progress.' } }),
+      prisma.workflowState.create({ data: { workflowId: devWorkflow.id, name: 'IN_PROGRESS',      label: 'In progress',       color: '#F59E0B', sortOrder: 2,
+        stateInstructions: 'Implement the feature or fix. Follow the existing code style. Run the dev server mentally — check for TypeScript errors. When done, commit your changes and transition to submit_review with a summary of what you did and what to test.' } }),
+      prisma.workflowState.create({ data: { workflowId: devWorkflow.id, name: 'PENDING_REVIEW',   label: 'Pending review',    color: '#8B5CF6', isBlocking: true, sortOrder: 3 } }),
+      prisma.workflowState.create({ data: { workflowId: devWorkflow.id, name: 'CHANGES_REQUIRED', label: 'Changes required',  color: '#EF4444', sortOrder: 4,
+        stateInstructions: 'Read the reviewer comment carefully. Address all requested changes. Then transition back to submit_review with a summary of what you changed.' } }),
+      prisma.workflowState.create({ data: { workflowId: devWorkflow.id, name: 'APPROVED',         label: 'Approved',          color: '#10B981', sortOrder: 5 } }),
+      prisma.workflowState.create({ data: { workflowId: devWorkflow.id, name: 'DONE',             label: 'Done',              color: '#6B7280', isTerminal: true, sortOrder: 6 } }),
+      prisma.workflowState.create({ data: { workflowId: devWorkflow.id, name: 'WONT_FIX',         label: "Won't fix",         color: '#D1D5DB', isTerminal: true, sortOrder: 7 } }),
+    ])
+
+  await Promise.all([
+    // Human/orchestrator routes
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dBacklog.id,    toStateId: dPlanning.id,    name: 'start_planning',   label: 'Start planning',      allowedRoles: ['human', 'agent', 'orchestrator'] } }),
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dBacklog.id,    toStateId: dWontFix.id,     name: 'close',            label: "Won't fix",           allowedRoles: ['human', 'orchestrator'] } }),
+    // Agent routes
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dPlanning.id,   toStateId: dInProgress.id,  name: 'begin_impl',       label: 'Begin implementation', allowedRoles: ['agent', 'human', 'orchestrator'] } }),
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dInProgress.id, toStateId: dReview.id,      name: 'submit_review',    label: 'Submit for review',   allowedRoles: ['agent', 'human'], requiresComment: true } }),
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dChanges.id,    toStateId: dReview.id,      name: 'submit_review',    label: 'Resubmit for review', allowedRoles: ['agent', 'human'], requiresComment: true } }),
+    // Human review routes
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dReview.id,     toStateId: dApproved.id,    name: 'approve',          label: 'Approve',             allowedRoles: ['human'] } }),
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dReview.id,     toStateId: dChanges.id,     name: 'request_changes',  label: 'Request changes',     allowedRoles: ['human'], requiresComment: true } }),
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dReview.id,     toStateId: dWontFix.id,     name: 'close',            label: "Won't fix",           allowedRoles: ['human'] } }),
+    // Completion
+    prisma.workflowTransition.create({ data: { workflowId: devWorkflow.id, fromStateId: dApproved.id,   toStateId: dDone.id,        name: 'merge',            label: 'Merge & close',       allowedRoles: ['human', 'orchestrator'] } }),
+  ])
+
+  // ─── Backlog tasks for AgentTask itself ───────────────────────────────
+  const devTasks = [
+    {
+      title: 'Add task search and filter to the tasks page',
+      description: 'The tasks page currently shows only a kanban board with no way to search or filter. Add a search input (filters by title), an "Only mine" toggle (filters by assignedTo = current agent/user), and a priority filter dropdown. The search should be client-side for speed. Keep the existing kanban board below the filters.',
+      context: { file: 'src/app/tasks/page.tsx', component: 'KanbanBoard', priority: 'high' },
+      priority: 2,
+    },
+    {
+      title: 'Add drag & drop to Kanban board',
+      description: 'Tasks on the kanban board should be draggable between columns. Use the HTML5 drag-and-drop API (no external library). When a card is dropped on a column, find the transition from the current state to the target state and call POST /api/v1/tasks/:id/transition. Show a visual drop target highlight while dragging. If no valid transition exists between the states, show an error toast and revert.',
+      context: { file: 'src/components/kanban-board.tsx', api: 'POST /api/v1/tasks/:id/transition', priority: 'high' },
+      priority: 2,
+    },
+    {
+      title: 'Show agent processing state on kanban card',
+      description: 'When an agent is invoked for a task there is no visual indication on the kanban board. Add a subtle pulsing animation or spinner badge on task cards that are in a state with an agentId configured and are not terminal. The card should show "⚙ Processing" while the agent works. Use SSE to update when done.',
+      context: { file: 'src/components/kanban-board.tsx', sse: '/api/v1/stream/tasks', priority: 'medium' },
+      priority: 1,
+    },
+    {
+      title: 'Agent error reporting — store failures as TaskEvents',
+      description: 'When agent-runner.ts fails (LLM call throws, JSON parse fails, or transition fails), the error is only logged to console. The task silently gets stuck. Fix: on any error, create a TaskEvent with actorType="agent", no state change, and the error message in the comment field. This makes failures visible in the task activity log in the UI. Also broadcast via SSE.',
+      context: { file: 'src/lib/agent-runner.ts', related: 'src/lib/state-machine.ts', priority: 'high' },
+      priority: 3,
+    },
+    {
+      title: 'Per-agent API tokens stored in DB',
+      description: 'Currently all agents share a single AGENT_API_KEY env var, making it impossible to distinguish which agent is calling the API (the X-Agent-Id header is self-reported and unverified). Add an "apiToken" field to the Agent model in Prisma. When an agent authenticates with a Bearer token, look it up in the agents table first. Fall back to the env var for backward compatibility. The agent name comes from the DB record (not the header). Update middleware.ts and auth.ts.',
+      context: { files: ['prisma/schema.prisma', 'src/lib/auth.ts', 'src/middleware.ts'], priority: 'medium' },
+      priority: 1,
+    },
+    {
+      title: 'Workflow templates — one-click starter workflows',
+      description: 'New users have to build workflows from scratch. Add a "Use template" flow on the /workflows/new page: show 4-5 pre-built templates (Code Review, Research, Content Pipeline, Bug Triage, Data Processing) as cards. Clicking one creates the workflow with states and transitions pre-configured. Templates defined in src/lib/workflow-templates.ts. Similar pattern to how skill-templates.ts works.',
+      context: { file: 'src/app/workflows/new/page.tsx', related: 'src/lib/skill-templates.ts', priority: 'medium' },
+      priority: 1,
+    },
+    {
+      title: 'Task detail: auto-refresh when agent finishes',
+      description: 'The task detail page currently only loads once (no polling, no SSE). If an agent is processing the task, the page shows stale state until manually refreshed. Connect to the SSE stream at /api/v1/stream/tasks and reload task data when a task_transitioned event arrives for this task ID. Show a "Processing…" indicator when the current state has an agentId.',
+      context: { file: 'src/app/tasks/[id]/page.tsx', sse: '/api/v1/stream/tasks', priority: 'medium' },
+      priority: 1,
+    },
+    {
+      title: 'Subtask support — parent/child task relationship',
+      description: 'The Task model has a parentId field but the UI does not expose it. On the task detail page, show a "Subtasks" section that lists child tasks (with their state badges) and an "Add subtask" button that opens the new task form pre-filled with the parent workflow and parentId. On the task list/kanban, show a "has subtasks" indicator on parent cards.',
+      context: { model: 'Task.parentId already exists in schema', files: ['src/app/tasks/[id]/page.tsx', 'src/app/tasks/new/page.tsx'], priority: 'low' },
+      priority: 0,
+    },
+  ]
+
+  for (const t of devTasks) {
+    const task = await prisma.task.create({
+      data: {
+        workflowId: devWorkflow.id,
+        stateId: dBacklog.id,
+        title: t.title,
+        description: t.description,
+        context: t.context,
+        priority: t.priority,
+        createdBy: 'human',
+      },
+    })
+    await prisma.taskEvent.create({
+      data: {
+        taskId: task.id,
+        toStateId: dBacklog.id,
+        actor: 'admin',
+        actorType: 'human',
+        metadata: { action: 'created' },
+      },
+    })
+  }
+
   console.log('✅ Seed complete.')
 }
 

@@ -27,6 +27,13 @@ interface Workflow {
   transitions: Transition[]
 }
 
+// ─── Drag context ─────────────────────────────────────────────────────────────
+
+interface DragState {
+  taskId: string
+  fromStateId: string
+}
+
 // ─── Column header settings panel ────────────────────────────────────────────
 
 function ColumnSettings({
@@ -141,62 +148,81 @@ function ColumnSettings({
 
 // ─── Task card ────────────────────────────────────────────────────────────────
 
-function TaskCard({ task }: { task: Task }) {
+function TaskCard({
+  task,
+  onDragStart,
+}: {
+  task: Task
+  onDragStart: (taskId: string, fromStateId: string) => void
+}) {
   const priColors = ['#9CA3AF', '#60A5FA', '#F59E0B', '#EF4444']
   const priColor  = priColors[task.priority] ?? priColors[0]
 
   return (
-    <Link
-      href={`/tasks/${task.id}`}
-      className="block bg-white border border-gray-200 rounded-lg hover:shadow-md hover:border-gray-300 transition-all cursor-pointer group"
-      style={{ borderLeft: `3px solid ${priColor}` }}
+    <div
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart(task.id, task.stateId)
+      }}
+      className="cursor-grab active:cursor-grabbing"
     >
-      <div className="p-3">
-        {/* Top meta */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-mono text-gray-400">{task.id.slice(-6).toUpperCase()}</span>
-          {task.state.isBlocking && (
-            <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-medium">
-              REVIEW
-            </span>
-          )}
-        </div>
-
-        {/* Title */}
-        <p className="text-sm font-medium text-gray-800 line-clamp-2 group-hover:text-blue-700 leading-snug">
-          {task.title}
-        </p>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between mt-3">
-          <div className="flex items-center gap-1.5">
-            {/* Priority dot */}
-            <div
-              className="w-2 h-2 rounded-full shrink-0"
-              title={priorityLabel(task.priority)}
-              style={{ backgroundColor: priColor }}
-            />
-            <span className="text-xs text-gray-400">{priorityLabel(task.priority)}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">{timeAgo(task.updatedAt)}</span>
-            {task.assignedTo ? (
-              <div
-                className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold shrink-0"
-                title={task.assignedTo}
-              >
-                {initials(task.assignedTo)}
-              </div>
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center" title="Unassigned">
-                <span className="text-xs text-gray-400">?</span>
-              </div>
+      <Link
+        href={`/tasks/${task.id}`}
+        draggable={false}
+        onClick={e => {
+          // Let drag win — suppress navigation if dragging started
+          if ((e.target as HTMLElement).closest('[data-dragging]')) e.preventDefault()
+        }}
+        className="block bg-white border border-gray-200 rounded-lg hover:shadow-md hover:border-gray-300 transition-all group"
+        style={{ borderLeft: `3px solid ${priColor}` }}
+      >
+        <div className="p-3">
+          {/* Top meta */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-mono text-gray-400">{task.id.slice(-6).toUpperCase()}</span>
+            {task.state.isBlocking && (
+              <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-medium">
+                REVIEW
+              </span>
             )}
           </div>
+
+          {/* Title */}
+          <p className="text-sm font-medium text-gray-800 line-clamp-2 group-hover:text-blue-700 leading-snug">
+            {task.title}
+          </p>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-2 h-2 rounded-full shrink-0"
+                title={priorityLabel(task.priority)}
+                style={{ backgroundColor: priColor }}
+              />
+              <span className="text-xs text-gray-400">{priorityLabel(task.priority)}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">{timeAgo(task.updatedAt)}</span>
+              {task.assignedTo ? (
+                <div
+                  className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold shrink-0"
+                  title={task.assignedTo}
+                >
+                  {initials(task.assignedTo)}
+                </div>
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center" title="Unassigned">
+                  <span className="text-xs text-gray-400">?</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </Link>
+      </Link>
+    </div>
   )
 }
 
@@ -208,14 +234,19 @@ function Column({
   workflowId,
   transitions,
   onStateUpdated,
+  onDragStart,
+  onDrop,
 }: {
   state: State
   tasks: Task[]
   workflowId: string
   transitions: Transition[]
   onStateUpdated: (s: State) => void
+  onDragStart: (taskId: string, fromStateId: string) => void
+  onDrop: (toStateId: string) => void
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [dragOver, setDragOver]         = useState(false)
 
   return (
     <div className="flex flex-col shrink-0 w-[272px]">
@@ -276,15 +307,24 @@ function Column({
         )}
       </div>
 
-      {/* Cards */}
-      <div className="flex-1 space-y-2 min-h-[120px]">
+      {/* Cards — drop zone */}
+      <div
+        className={`flex-1 space-y-2 min-h-[120px] rounded-lg transition-colors ${
+          dragOver ? 'bg-blue-50 ring-2 ring-blue-300 ring-inset' : ''
+        }`}
+        onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); onDrop(state.id) }}
+      >
         {tasks.map(task => (
-          <TaskCard key={task.id} task={task} />
+          <TaskCard key={task.id} task={task} onDragStart={onDragStart} />
         ))}
 
         {tasks.length === 0 && (
-          <div className="h-20 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center">
-            <span className="text-xs text-gray-300">No tasks</span>
+          <div className={`h-20 border-2 border-dashed rounded-lg flex items-center justify-center transition-colors ${
+            dragOver ? 'border-blue-300' : 'border-gray-200'
+          }`}>
+            <span className="text-xs text-gray-300">{dragOver ? 'Drop here' : 'No tasks'}</span>
           </div>
         )}
       </div>
@@ -294,10 +334,22 @@ function Column({
 
 // ─── Main board ───────────────────────────────────────────────────────────────
 
-export function KanbanBoard({ workflowId }: { workflowId: string }) {
-  const [workflow, setWorkflow]   = useState<Workflow | null>(null)
-  const [tasksByState, setByState] = useState<Record<string, Task[]>>({})
-  const [loading, setLoading]     = useState(true)
+export function KanbanBoard({
+  workflowId,
+  filterSearch = '',
+  filterAssignedTo = '',
+  filterPriority,
+}: {
+  workflowId: string
+  filterSearch?: string
+  filterAssignedTo?: string
+  filterPriority?: number
+}) {
+  const [workflow, setWorkflow]     = useState<Workflow | null>(null)
+  const [tasksByState, setByState]  = useState<Record<string, Task[]>>({})
+  const [loading, setLoading]       = useState(true)
+  const [dragState, setDragState]   = useState<DragState | null>(null)
+  const [dropError, setDropError]   = useState('')
 
   const load = useCallback(async () => {
     const [wfRes, tasksRes] = await Promise.all([
@@ -333,6 +385,52 @@ export function KanbanBoard({ workflowId }: { workflowId: string }) {
     )
   }
 
+  async function handleDrop(toStateId: string) {
+    if (!dragState || !workflow) return
+    const { taskId, fromStateId } = dragState
+    setDragState(null)
+
+    if (fromStateId === toStateId) return
+
+    // Find a valid transition from fromState → toState
+    const transition = workflow.transitions.find(
+      t => t.fromStateId === fromStateId && t.toState.id === toStateId
+    )
+
+    if (!transition) {
+      const fromLabel = workflow.states.find(s => s.id === fromStateId)?.label ?? fromStateId
+      const toLabel   = workflow.states.find(s => s.id === toStateId)?.label   ?? toStateId
+      setDropError(`No transition from "${fromLabel}" to "${toLabel}"`)
+      setTimeout(() => setDropError(''), 3500)
+      return
+    }
+
+    // Optimistically move the card
+    setByState(prev => {
+      const next = { ...prev }
+      const task = (prev[fromStateId] ?? []).find(t => t.id === taskId)
+      if (!task) return prev
+      next[fromStateId] = (prev[fromStateId] ?? []).filter(t => t.id !== taskId)
+      const toState = workflow.states.find(s => s.id === toStateId)!
+      next[toStateId]   = [...(prev[toStateId] ?? []), { ...task, stateId: toStateId, state: toState }]
+      return next
+    })
+
+    const res = await fetch(`/api/v1/tasks/${taskId}/transition`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transitionName: transition.name }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setDropError(data.message ?? 'Transition failed')
+      setTimeout(() => setDropError(''), 3500)
+      // Revert optimistic update
+      load()
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex gap-4">
@@ -344,18 +442,47 @@ export function KanbanBoard({ workflowId }: { workflowId: string }) {
   }
   if (!workflow) return <div className="text-red-500 py-8">Workflow not found.</div>
 
+  // Apply client-side filters
+  const searchLower = filterSearch.toLowerCase()
+  const filteredByState: Record<string, Task[]> = {}
+  for (const [stateId, tasks] of Object.entries(tasksByState)) {
+    filteredByState[stateId] = tasks.filter(t => {
+      if (searchLower && !t.title.toLowerCase().includes(searchLower)) return false
+      if (filterAssignedTo && t.assignedTo !== filterAssignedTo) return false
+      if (filterPriority !== undefined && t.priority !== filterPriority) return false
+      return true
+    })
+  }
+  const isFiltered = !!(filterSearch || filterAssignedTo || filterPriority !== undefined)
+  const filteredTotal = Object.values(filteredByState).reduce((s, a) => s + a.length, 0)
+
   return (
-    <div className="flex gap-5 overflow-x-auto pb-6 pt-1 scrollbar-thin min-h-[400px]">
-      {workflow.states.map(state => (
-        <Column
-          key={state.id}
-          state={state}
-          tasks={tasksByState[state.id] ?? []}
-          workflowId={workflowId}
-          transitions={workflow.transitions}
-          onStateUpdated={handleStateUpdated}
-        />
-      ))}
+    <div>
+      {dropError && (
+        <div className="mb-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          {dropError}
+        </div>
+      )}
+      {isFiltered && (
+        <p className="mb-3 text-xs text-gray-400">{filteredTotal} task{filteredTotal !== 1 ? 's' : ''} match</p>
+      )}
+      <div
+        className="flex gap-5 overflow-x-auto pb-6 pt-1 scrollbar-thin min-h-[400px]"
+        onDragEnd={() => setDragState(null)}
+      >
+        {workflow.states.map(state => (
+          <Column
+            key={state.id}
+            state={state}
+            tasks={filteredByState[state.id] ?? []}
+            workflowId={workflowId}
+            transitions={workflow.transitions}
+            onStateUpdated={handleStateUpdated}
+            onDragStart={(taskId, fromStateId) => setDragState({ taskId, fromStateId })}
+            onDrop={handleDrop}
+          />
+        ))}
+      </div>
     </div>
   )
 }

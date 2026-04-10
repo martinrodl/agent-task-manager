@@ -92,6 +92,7 @@ model Agent {
   id           String   @id @default(cuid())
   name         String   @unique
   description  String?
+  apiToken     String?  @unique // Bearer token agents use to authenticate with this server
   // LLM credentials — either via aiProviderId (recommended) or manual fields below
   aiProviderId String?
   aiProvider   AiProvider? @relation(fields: [aiProviderId], references: [id], onDelete: SetNull)

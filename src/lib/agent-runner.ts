@@ -12,6 +12,7 @@
 import { prisma } from './prisma'
 import { callAgent } from './agent-connector'
 import { executeTransition } from './state-machine'
+import { emitTaskEvent } from './sse'
 
 interface AgentOutput {
   transitionName: string
@@ -112,6 +113,33 @@ function parseOutput(raw: string): AgentOutput | null {
   }
 }
 
+// ─── Error reporter ───────────────────────────────────────────────────────────
+
+async function recordAgentError(taskId: string, agentName: string, message: string): Promise<void> {
+  try {
+    const task = await prisma.task.findUnique({ where: { id: taskId }, select: { workflowId: true } })
+    await prisma.taskEvent.create({
+      data: {
+        taskId,
+        actor:     agentName,
+        actorType: 'agent',
+        comment:   `⚠️ Agent error: ${message}`,
+        metadata:  { error: true },
+      },
+    })
+    emitTaskEvent({
+      type:      'task_updated',
+      taskId,
+      taskTitle: '',
+      actor:     agentName,
+      actorType: 'agent',
+      workflowId: task?.workflowId ?? '',
+    })
+  } catch (err) {
+    console.error('[agent-runner] Failed to record error event:', err)
+  }
+}
+
 export async function runAgent(taskId: string, agentName: string): Promise<void> {
   console.log(`[agent-runner] Starting agent "${agentName}" for task ${taskId}`)
 
@@ -124,7 +152,9 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
     },
   })
   if (!agentConfig) {
-    console.warn(`[agent-runner] No enabled agent config found for name "${agentName}" — skipping auto-invoke`)
+    const msg = `No enabled agent config found for name "${agentName}"`
+    console.warn(`[agent-runner] ${msg} — skipping auto-invoke`)
+    await recordAgentError(taskId, agentName, msg)
     return
   }
 
@@ -140,7 +170,10 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
       },
     },
   })
-  if (!task) { console.warn(`[agent-runner] Task ${taskId} not found`); return }
+  if (!task) {
+    console.warn(`[agent-runner] Task ${taskId} not found`)
+    return
+  }
 
   const transitions = task.workflow.transitions.filter(
     t => t.fromStateId === task.stateId && t.allowedRoles.includes('agent')
@@ -229,7 +262,9 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
       messages
     )
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
     console.error(`[agent-runner] LLM call failed for agent "${agentName}":`, err)
+    await recordAgentError(taskId, agentName, `LLM call failed: ${msg}`)
     return
   }
 
@@ -238,7 +273,9 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
   // Parse output
   const output = parseOutput(response.content)
   if (!output) {
-    console.error(`[agent-runner] Could not parse JSON from LLM response: ${response.content.slice(0, 300)}`)
+    const preview = response.content.slice(0, 200)
+    console.error(`[agent-runner] Could not parse JSON from LLM response: ${preview}`)
+    await recordAgentError(taskId, agentName, `Could not parse JSON response. Raw output: ${preview}`)
     return
   }
 
@@ -261,6 +298,8 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
     )
     console.log(`[agent-runner] Transition "${output.transitionName}" executed for task ${taskId}`)
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
     console.error(`[agent-runner] Transition failed:`, err)
+    await recordAgentError(taskId, agentName, `Transition "${output.transitionName}" failed: ${msg}`)
   }
 }

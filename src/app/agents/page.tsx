@@ -9,6 +9,7 @@ import { AiAssistButton, type AgentResult } from '@/components/ai-assist'
 interface AiProviderOption { id: string; name: string; model: string; provider: string }
 interface Agent {
   id: string; name: string; description?: string
+  apiToken?: string | null
   aiProviderId?: string
   aiProvider?: AiProviderOption | null
   provider: string; baseUrl?: string; apiKey?: string; model?: string
@@ -21,6 +22,7 @@ interface EnvVar { id: string; key: string; description?: string }
 
 const EMPTY = {
   name: '', description: '',
+  apiToken: '',               // per-agent Bearer token for authenticating with this server
   aiProviderId: '',           // preferred: link to a Settings AI provider
   // manual fallback fields (only used when aiProviderId is empty)
   provider: 'openai', baseUrl: '', apiKey: '', model: '',
@@ -136,6 +138,7 @@ export default function AgentsPage() {
     }
     setForm({
       name: a.name, description: a.description ?? '',
+      apiToken: '',  // never pre-fill token — user must re-enter if changing
       aiProviderId: a.aiProviderId ?? '',
       provider: a.provider, baseUrl: a.baseUrl ?? '',
       apiKey: '', model: a.model ?? '',
@@ -159,13 +162,16 @@ export default function AgentsPage() {
     const method = isNew ? 'POST' : 'PATCH'
 
     const { skillIds: _skillIds, ...formData } = form
-    const body = {
+    const body: Record<string, unknown> = {
       ...formData,
+      apiToken:     formData.apiToken     || null,
       apiKey:       formData.apiKey       || null,
       description:  formData.description  || null,
       systemPrompt: formData.systemPrompt || null,
       extraConfig:  formData.extraConfig,
     }
+    // When editing: only send apiToken if user typed something new
+    if (!isNew && !formData.apiToken) delete body.apiToken
 
     const res = await fetch(url, {
       method,
@@ -393,6 +399,25 @@ export default function AgentsPage() {
                     Enabled (auto-invoke)
                   </label>
                 </div>
+              </div>
+
+              {/* Agent API token */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  API token <span className="text-gray-400 font-normal">(optional — agent uses this Bearer token to authenticate with AgentTask)</span>
+                </label>
+                <input
+                  type="password"
+                  value={form.apiToken ?? ''}
+                  onChange={e => setForm(f => ({ ...f, apiToken: e.target.value }))}
+                  placeholder={editing && editing !== 'new' ? 'Leave blank to keep existing token' : 'e.g. agt_abc123… (generate a random string)'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-400 mt-0.5">
+                  When set, this agent authenticates by sending{' '}
+                  <code className="bg-gray-100 px-1 rounded">Authorization: Bearer &lt;token&gt;</code>.
+                  Falls back to the global <code className="bg-gray-100 px-1 rounded">AGENT_API_KEY</code> env var if blank.
+                </p>
               </div>
 
               {/* System prompt */}

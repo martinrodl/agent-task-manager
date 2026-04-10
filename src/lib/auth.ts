@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
+import { prisma } from './prisma'
 
 const secret = () => new TextEncoder().encode(
   process.env.SECRET_KEY ?? 'fallback-secret-change-me'
@@ -48,18 +49,30 @@ export async function getSession(): Promise<boolean> {
 // ─── API request auth (agent or human) ───────────────────────────────────────
 
 export async function resolveActor(req: NextRequest): Promise<AuthContext | null> {
-  // 1. API key — agent
+  // 1. Bearer token — agent or orchestrator
   const authHeader = req.headers.get('authorization')
   if (authHeader?.startsWith('Bearer ')) {
     const key = authHeader.slice(7)
-    const agentKey = process.env.AGENT_API_KEY ?? ''
-    const orchKey  = process.env.ORCHESTRATOR_API_KEY ?? ''
+    if (!key) return null
 
-    if (key === orchKey && orchKey) {
+    // 1a. Check per-agent tokens in DB first
+    const agentRecord = await prisma.agent.findFirst({
+      where: { apiToken: key, enabled: true },
+      select: { name: true },
+    })
+    if (agentRecord) {
+      return { actor: agentRecord.name, actorType: 'agent' }
+    }
+
+    // 1b. Fall back to env-var keys (backward compat + orchestrator)
+    const orchKey  = process.env.ORCHESTRATOR_API_KEY ?? ''
+    const agentKey = process.env.AGENT_API_KEY ?? ''
+
+    if (orchKey && key === orchKey) {
       const agentId = req.headers.get('x-agent-id') ?? 'orchestrator'
       return { actor: agentId, actorType: 'orchestrator' }
     }
-    if (key === agentKey && agentKey) {
+    if (agentKey && key === agentKey) {
       const agentId = req.headers.get('x-agent-id') ?? 'agent'
       return { actor: agentId, actorType: 'agent' }
     }

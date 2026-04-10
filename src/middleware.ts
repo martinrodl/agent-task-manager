@@ -19,9 +19,15 @@ async function isValidSession(token: string | undefined): Promise<boolean> {
 function isValidApiKey(authHeader: string | null): boolean {
   if (!authHeader?.startsWith('Bearer ')) return false
   const key = authHeader.slice(7)
+  if (!key) return false
   const agentKey = process.env.AGENT_API_KEY ?? ''
   const orchKey  = process.env.ORCHESTRATOR_API_KEY ?? ''
-  return (!!agentKey && key === agentKey) || (!!orchKey && key === orchKey)
+  // Env-var keys are validated here (no DB available in middleware).
+  // Per-agent DB tokens are validated later in resolveActor() inside the route handler.
+  // Any non-empty Bearer token is allowed through; resolveActor returns null if invalid.
+  if ((!!agentKey && key === agentKey) || (!!orchKey && key === orchKey)) return true
+  // Unknown token — let it through; the route handler will reject if not in DB
+  return true
 }
 
 export async function middleware(request: NextRequest) {

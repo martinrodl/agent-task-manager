@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     data: {
       name:         body.name,
       description:  body.description  ?? null,
+      apiToken:     body.apiToken     ?? null,
       aiProviderId: body.aiProviderId  ?? null,
       provider:     body.provider     ?? 'openai',
       baseUrl:      body.baseUrl      ?? null,
