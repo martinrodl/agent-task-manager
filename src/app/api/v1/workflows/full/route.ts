@@ -46,10 +46,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'states array is required and must be non-empty' }, { status: 400 })
   }
 
+  // Resolve projectSlug → projectId if provided
+  let projectId: string | null = body.projectId ?? null
+  if (!projectId && body.projectSlug) {
+    const proj = await prisma.project.findUnique({ where: { slug: body.projectSlug } })
+    if (!proj) return NextResponse.json({ error: `Project slug '${body.projectSlug}' not found` }, { status: 404 })
+    projectId = proj.id
+  }
+
   const workflow = await prisma.workflow.create({
     data: {
       name:        body.name,
       description: body.description ?? null,
+      projectId,
     },
   })
 

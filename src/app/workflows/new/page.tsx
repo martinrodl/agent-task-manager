@@ -1,14 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { WORKFLOW_TEMPLATES, TEMPLATE_TAGS, type WorkflowTemplate } from '@/lib/workflow-templates'
 
 type Mode = 'choose' | 'template' | 'blank'
 
-export default function NewWorkflowPage() {
+function NewWorkflowForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const projectId = searchParams.get('projectId') ?? ''
+
   const [mode, setMode]               = useState<Mode>('choose')
   const [selectedTemplate, setSelected] = useState<WorkflowTemplate | null>(null)
   const [activeTag, setActiveTag]     = useState<string>('all')
@@ -41,7 +45,7 @@ export default function NewWorkflowPage() {
       const res = await fetch('/api/v1/workflows/from-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateId: selectedTemplate.id, name, description }),
+        body: JSON.stringify({ templateId: selectedTemplate.id, name, description, projectId: projectId || undefined }),
       })
       if (res.ok) {
         const wf = await res.json()
@@ -56,7 +60,7 @@ export default function NewWorkflowPage() {
       const res = await fetch('/api/v1/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({ name, description, projectId: projectId || undefined }),
       })
       if (res.ok) {
         const wf = await res.json()
@@ -223,4 +227,8 @@ export default function NewWorkflowPage() {
       </div>
     </div>
   )
+}
+
+export default function NewWorkflowPage() {
+  return <Suspense><NewWorkflowForm /></Suspense>
 }

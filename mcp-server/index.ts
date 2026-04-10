@@ -138,7 +138,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_workflows',
-      description: 'List all available workflows with their states. Use to find valid workflowId values for create_task.',
+      description: 'List workflows. Optionally filter by project slug or projectId.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectSlug: { type: 'string', description: 'Filter by project slug, e.g. "backend"' },
+          projectId:   { type: 'string', description: 'Filter by project ID' },
+        },
+      },
+    },
+    {
+      name: 'list_projects',
+      description: 'List all projects with their workflows. Use to discover the project namespace structure.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -161,6 +172,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           description: {
             type: 'string',
             description: 'Short description of what this workflow is for',
+          },
+          projectSlug: {
+            type: 'string',
+            description: 'Assign to a project by slug, e.g. "backend". Use list_projects to find slugs.',
+          },
+          projectId: {
+            type: 'string',
+            description: 'Assign to a project by ID (alternative to projectSlug)',
           },
           states: {
             type: 'array',
@@ -260,8 +279,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         })
         break
 
-      case 'list_workflows':
-        data = await api('/workflows')
+      case 'list_workflows': {
+        const p = new URLSearchParams()
+        // Resolve projectSlug → projectId via list_projects
+        if (args.projectSlug || args.projectId) {
+          if (args.projectSlug) {
+            const projects = await api('/projects') as Array<{ id: string; slug: string }>
+            const proj = projects.find(p => p.slug === args.projectSlug)
+            if (proj) p.set('projectId', proj.id)
+          } else {
+            p.set('projectId', String(args.projectId))
+          }
+        }
+        data = await api(`/workflows${p.toString() ? '?' + p.toString() : ''}`)
+        break
+      }
+
+      case 'list_projects':
+        data = await api('/projects')
         break
 
       case 'create_workflow':
@@ -270,6 +305,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           body: JSON.stringify({
             name:        args.name,
             description: args.description ?? undefined,
+            projectSlug: args.projectSlug ?? undefined,
+            projectId:   args.projectId   ?? undefined,
             states:      args.states      ?? [],
             transitions: args.transitions ?? [],
           }),

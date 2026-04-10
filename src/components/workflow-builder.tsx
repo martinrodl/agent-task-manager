@@ -23,6 +23,7 @@ interface Transition {
 }
 interface Workflow {
   id: string; name: string; description?: string
+  projectId?: string | null
   workspaceType?: string | null
   workspacePath?: string | null
   githubRepo?: string | null
@@ -54,12 +55,18 @@ export function WorkflowBuilder({
   const [ghToken, setGhToken]         = useState(workflow.githubToken ?? '')
   const [webhookUrl, setWebhookUrl]   = useState(workflow.webhookUrl ?? '')
   const [webhookSecret, setWebhookSecret] = useState(workflow.webhookSecret ?? '')
+  const [projectId, setProjectId]     = useState(workflow.projectId ?? '')
+  const [projects, setProjects]       = useState<{ id: string; name: string; color: string }[]>([])
   const [states, setStates]           = useState<State[]>(initialStates)
   const [transitions, setTransitions] = useState<Transition[]>(initialTransitions)
   const [allWorkflows, setAllWorkflows] = useState<WorkflowOption[]>([])
 
-  // Fetch all workflows for the spawn-workflow dropdown
   useEffect(() => {
+    // Fetch projects for the project selector
+    fetch('/api/v1/projects').then(r => r.json()).then((data: { id: string; name: string; color: string }[]) => {
+      if (Array.isArray(data)) setProjects(data)
+    }).catch(() => {})
+    // Fetch all workflows for the spawn-workflow dropdown
     fetch('/api/v1/workflows').then(r => r.json()).then((data: WorkflowOption[]) => {
       if (Array.isArray(data)) setAllWorkflows(data.filter(w => w.id !== workflow.id))
     }).catch(() => {})
@@ -197,6 +204,7 @@ export function WorkflowBuilder({
         body: JSON.stringify({
           name,
           description,
+          projectId:     projectId || null,
           workspaceType: wsType || null,
           workspacePath: wsType === 'local'  ? wsPath  || null : null,
           githubRepo:    wsType === 'github' ? ghRepo   || null : null,
@@ -278,6 +286,28 @@ export function WorkflowBuilder({
             <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
             <input value={description} onChange={e => setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
+        </div>
+
+        {/* Project */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            📁 Project <span className="font-normal text-gray-400">— optional namespace grouping</span>
+          </label>
+          <select
+            value={projectId}
+            onChange={e => setProjectId(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">— no project —</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          {projects.length === 0 && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              No projects yet. <a href="/projects/new" className="text-blue-600 hover:underline">Create one →</a>
+            </p>
+          )}
         </div>
 
         {/* Workspace */}

@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params
   const body = await req.json().catch(() => ({}))
 
-  const allowed = ['name', 'description', 'workspaceType', 'workspacePath', 'githubRepo', 'githubBranch', 'githubToken', 'webhookUrl', 'webhookSecret'] as const
+  const allowed = ['name', 'description', 'projectId', 'workspaceType', 'workspacePath', 'githubRepo', 'githubBranch', 'githubToken', 'webhookUrl', 'webhookSecret'] as const
   const data: Record<string, unknown> = {}
   for (const k of allowed) {
     if (k in body) data[k] = body[k] === '' ? null : body[k]

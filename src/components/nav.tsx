@@ -5,11 +5,12 @@ import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const links = [
-  { href: '/',           label: 'Dashboard',  icon: '⬛' },
-  { href: '/tasks',      label: 'Tasks',      icon: '✅' },
-  { href: '/review',     label: 'Review',     icon: '👁', badge: true },
-  { href: '/workflows',  label: 'Workflows',  icon: '⚙️' },
-  { href: '/agents',     label: 'Agents',     icon: '🤖' },
+  { href: '/',           label: 'Dashboard',     icon: '⬛' },
+  { href: '/projects',   label: 'Projects',      icon: '📁' },
+  { href: '/tasks',      label: 'Tasks',         icon: '✅' },
+  { href: '/review',     label: 'Review',        icon: '👁', badge: true },
+  { href: '/workflows',  label: 'Workflows',     icon: '⚙️' },
+  { href: '/agents',     label: 'Agents',        icon: '🤖' },
   { href: '/skills',     label: 'Skills & Keys', icon: '🔧' },
   { href: '/settings',   label: 'Settings',      icon: '⚙️' },
 ]

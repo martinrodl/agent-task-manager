@@ -7,10 +7,23 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique  // short namespace key, e.g. "backend", "mobile"
+  description String?
+  color       String   @default("#6B7280")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workflows   Workflow[]
+}
+
 model Workflow {
   id          String   @id @default(cuid())
   name        String
   description String?
+  projectId   String?
 
   // Workspace — where agents operate
   workspaceType   String?  // "local" | "github" | null
@@ -26,6 +39,7 @@ model Workflow {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  project     Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
   states      WorkflowState[]
   transitions WorkflowTransition[]
   tasks       Task[]
