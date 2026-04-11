@@ -216,8 +216,35 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h3 className="text-sm font-medium text-gray-500 mb-2">Result <span className="text-xs text-gray-400">(agent output)</span></h3>
                 <pre className="text-sm font-mono bg-green-50 p-3 rounded-lg overflow-auto text-gray-700">
-                  {JSON.stringify(task.result, null, 2)}
+                  {JSON.stringify(
+                    { ...task.result, screenshots: task.result.screenshots ? `[${(task.result.screenshots as string[]).length} screenshot(s)]` : undefined },
+                    null, 2
+                  )}
                 </pre>
+              </div>
+            )}
+
+            {/* Screenshots gallery */}
+            {Array.isArray(task.result?.screenshots) && (task.result.screenshots as string[]).length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h3 className="text-sm font-medium text-gray-500 mb-3">
+                  Screenshots <span className="text-xs text-gray-400">({(task.result.screenshots as string[]).length})</span>
+                </h3>
+                <div className="space-y-3">
+                  {(task.result.screenshots as string[]).map((b64, i) => (
+                    <div key={i} className="border border-gray-100 rounded-lg overflow-hidden">
+                      <div className="bg-gray-50 px-3 py-1 text-xs text-gray-400 border-b border-gray-100">
+                        Screenshot {i + 1}
+                      </div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`data:image/png;base64,${b64}`}
+                        alt={`Screenshot ${i + 1}`}
+                        className="w-full"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

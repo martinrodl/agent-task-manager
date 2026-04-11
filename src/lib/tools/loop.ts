@@ -160,6 +160,7 @@ export async function agenticLoop(
   let totalLatencyMs  = 0
   let iterations      = 0
   let lastLlmCallId: string | null = null
+  const screenshots:  string[] = []   // base64 PNGs collected across all tool calls
 
   try {
     await setupProviders(providerNames, context)
@@ -235,6 +236,13 @@ export async function agenticLoop(
           resp.toolCalls.map(async tc => {
             const result = await executeTool(tc.name, tc.args, providerNames, context)
             console.log(`[agentic-loop]   tool ${tc.name}: ${result.success ? 'ok' : result.error}`)
+
+            // Collect screenshots for task result gallery
+            if (tc.name === 'playwright_screenshot' && result.success) {
+              const b64 = (result.output as Record<string, unknown>)?.base64
+              if (typeof b64 === 'string') screenshots.push(b64)
+            }
+
             return { id: tc.id, name: tc.name, result }
           })
         )
@@ -245,6 +253,15 @@ export async function agenticLoop(
 
       // ── Final text response ───────────────────────────────────────────────
       const output = parseOutput(resp.textContent)
+
+      // Attach collected screenshots to result so the UI can display them
+      if (output && screenshots.length > 0) {
+        output.result = {
+          ...(output.result as Record<string, unknown> ?? {}),
+          screenshots,
+        }
+      }
+
       return { output, iterations, totalLatencyMs, lastLlmCallId }
     }
 
