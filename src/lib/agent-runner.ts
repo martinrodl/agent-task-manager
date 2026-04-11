@@ -352,8 +352,11 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
   }
 
   // ── Agentic loop path (when agent has tools configured) ─────────────────────
-  if (agentConfig.tools.length > 0) {
-    console.log(`[agent-runner] Using agentic loop with tools: [${agentConfig.tools.join(', ')}]`)
+  const agentTools: string[] = Array.isArray(agentConfig.tools) ? agentConfig.tools : []
+  console.log(`[agent-runner] Agent "${agentName}" tools: [${agentTools.join(', ')}], maxIterations: ${agentConfig.maxIterations ?? 20}`)
+
+  if (agentTools.length > 0) {
+    console.log(`[agent-runner] Using agentic loop with tools: [${agentTools.join(', ')}]`)
 
     const context = {
       taskId:        taskId,
@@ -366,7 +369,7 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
     const loopResult = await agenticLoop(
       agentCfg,
       messages,
-      agentConfig.tools,
+      agentTools,
       context,
       {
         maxIterations: agentConfig.maxIterations,

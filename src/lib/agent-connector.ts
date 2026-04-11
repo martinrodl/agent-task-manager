@@ -303,7 +303,8 @@ export async function callAnthropicWithTools(
       'x-api-key':         cfg.apiKey ?? '',
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify(body),
+    body:   JSON.stringify(body),
+    signal: AbortSignal.timeout(120_000),
   })
 
   if (!res.ok) {
@@ -365,7 +366,8 @@ export async function callOpenAICompatWithTools(
   const res = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body:   JSON.stringify(body),
+    signal: AbortSignal.timeout(120_000),
   })
 
   if (!res.ok) {
