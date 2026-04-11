@@ -14,6 +14,7 @@ import { callAgent } from './agent-connector'
 import { executeTransition, LlmMeta } from './state-machine'
 import { emitTaskEvent } from './sse'
 import { startTimeoutWatcher } from './timeout-watcher'
+import { agenticLoop } from './tools/loop'
 
 // ─── Langfuse integration (optional, fire-and-forget) ─────────────────────────
 // Active only when LANGFUSE_SECRET_KEY env var is set.
@@ -350,6 +351,81 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
     },
   }
 
+  // ── Agentic loop path (when agent has tools configured) ─────────────────────
+  if (agentConfig.tools.length > 0) {
+    console.log(`[agent-runner] Using agentic loop with tools: [${agentConfig.tools.join(', ')}]`)
+
+    const context = {
+      taskId:        taskId,
+      workspacePath: task.workflow.workspacePath ?? null,
+      envVars:       Object.fromEntries(
+        agentConfig.envVars.map(ae => [ae.envVar.key, ae.envVar.value])
+      ),
+    }
+
+    const loopResult = await agenticLoop(
+      agentCfg,
+      messages,
+      agentConfig.tools,
+      context,
+      {
+        maxIterations: agentConfig.maxIterations,
+        taskId,
+        agentName,
+        provider:      llmProvider,
+        model:         llmModel,
+        systemPrompt:  systemPrompt,
+      },
+    )
+
+    console.log(`[agent-runner] Loop finished: ${loopResult.iterations} iteration(s), ${loopResult.totalLatencyMs}ms`)
+
+    if (!loopResult.output) {
+      const msg = loopResult.lastError ?? 'Agentic loop returned no output'
+      console.error(`[agent-runner] ${msg}`)
+      await recordAgentError(taskId, agentName, msg)
+      return
+    }
+
+    // Re-fetch task state guard
+    const freshTask2 = await prisma.task.findUnique({ where: { id: taskId }, select: { stateId: true } })
+    if (!freshTask2 || freshTask2.stateId !== task.stateId) {
+      console.warn(`[agent-runner] Task ${taskId} state changed while loop ran — skipping transition`)
+      return
+    }
+
+    try {
+      const transitionResult = await executeTransition(
+        taskId,
+        loopResult.output.transitionName,
+        agentName,
+        'agent',
+        loopResult.output.comment,
+        loopResult.output.result,
+        {
+          llmCallId:   loopResult.lastLlmCallId,
+          model:       llmModel,
+          provider:    llmProvider,
+          latencyMs:   loopResult.totalLatencyMs,
+          parseSuccess: true,
+        },
+      )
+      if (loopResult.lastLlmCallId && transitionResult.event?.id) {
+        await prisma.llmCall.update({
+          where: { id: loopResult.lastLlmCallId },
+          data:  { taskEventId: transitionResult.event.id },
+        }).catch(() => {})
+      }
+      console.log(`[agent-runner] Transition "${loopResult.output.transitionName}" executed for task ${taskId}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[agent-runner] Transition failed:`, err)
+      await recordAgentError(taskId, agentName, `Transition "${loopResult.output.transitionName}" failed: ${msg}`)
+    }
+    return
+  }
+
+  // ── Single-shot path (no tools) ───────────────────────────────────────────
   let response: Awaited<ReturnType<typeof callAgent>> | undefined
   let llmCallId: string | null = null
   const t0 = Date.now()

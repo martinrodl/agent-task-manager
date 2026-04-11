@@ -15,8 +15,16 @@ interface Agent {
   provider: string; baseUrl?: string; apiKey?: string; model?: string
   systemPrompt?: string; maxTokens: number; temperature: number
   extraConfig: Record<string, unknown>; enabled: boolean
+  tools: string[]; maxIterations: number
   createdAt: string
 }
+
+const TOOL_PROVIDERS = [
+  { name: 'bash',       label: 'Bash',       desc: 'Run shell commands in workspace' },
+  { name: 'http',       label: 'HTTP',        desc: 'Make HTTP requests to APIs' },
+  { name: 'file',       label: 'File',        desc: 'Read/write files in workspace' },
+  { name: 'playwright', label: 'Playwright',  desc: 'Browser automation (headless Chrome)' },
+] as const
 interface Skill  { id: string; name: string; icon: string; description?: string }
 interface EnvVar { id: string; key: string; description?: string }
 
@@ -29,6 +37,7 @@ const EMPTY = {
   systemPrompt: '', maxTokens: 2048, temperature: 0.7,
   extraConfig: {} as Record<string, unknown>, enabled: true,
   skillIds: [] as string[],
+  tools: [] as string[], maxIterations: 20,
 }
 
 export default function AgentsPage() {
@@ -146,6 +155,7 @@ export default function AgentsPage() {
       maxTokens: a.maxTokens, temperature: a.temperature,
       extraConfig: a.extraConfig, enabled: a.enabled,
       skillIds,
+      tools: a.tools ?? [], maxIterations: a.maxIterations ?? 20,
     })
     setShowManual(!a.aiProviderId)
     setSkillSearch('')
@@ -164,11 +174,13 @@ export default function AgentsPage() {
     const { skillIds: _skillIds, ...formData } = form
     const body: Record<string, unknown> = {
       ...formData,
-      apiToken:     formData.apiToken     || null,
-      apiKey:       formData.apiKey       || null,
-      description:  formData.description  || null,
-      systemPrompt: formData.systemPrompt || null,
-      extraConfig:  formData.extraConfig,
+      apiToken:      formData.apiToken     || null,
+      apiKey:        formData.apiKey       || null,
+      description:   formData.description  || null,
+      systemPrompt:  formData.systemPrompt || null,
+      extraConfig:   formData.extraConfig,
+      tools:         formData.tools,
+      maxIterations: formData.maxIterations,
     }
     // When editing: only send apiToken if user typed something new
     if (!isNew && !formData.apiToken) delete body.apiToken
@@ -505,6 +517,52 @@ export default function AgentsPage() {
                 )}
               </div>
 
+              {/* Tool providers (agentic loop) */}
+              <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-medium text-gray-600">Tool providers (agentic loop)</label>
+                  {form.tools.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-gray-500">Max iterations:</span>
+                      <input
+                        type="number"
+                        min={1} max={50}
+                        value={form.maxIterations}
+                        onChange={e => setForm(f => ({ ...f, maxIterations: Number(e.target.value) }))}
+                        className="w-16 px-2 py-0.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {TOOL_PROVIDERS.map(tp => (
+                    <label key={tp.name} className="flex items-start gap-2 cursor-pointer select-none group">
+                      <input
+                        type="checkbox"
+                        checked={form.tools.includes(tp.name)}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          tools: e.target.checked
+                            ? [...f.tools, tp.name]
+                            : f.tools.filter(t => t !== tp.name),
+                        }))}
+                        className="mt-0.5 shrink-0"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-800 group-hover:text-blue-700">{tp.label}</span>
+                        <p className="text-xs text-gray-400">{tp.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {form.tools.length === 0 && (
+                  <p className="text-xs text-gray-400">No tools selected — agent runs in single-shot mode.</p>
+                )}
+                {form.tools.length > 0 && (
+                  <p className="text-xs text-amber-700">Agentic loop enabled — agent will call tools autonomously until it produces a final JSON response.</p>
+                )}
+              </div>
+
               {error && <p className="text-sm text-red-600">{error}</p>}
 
               <div className="flex gap-2 pt-1">
@@ -565,6 +623,12 @@ export default function AgentsPage() {
                             <span>temp {a.temperature}</span>
                             <span>·</span>
                             <span>{a.maxTokens} tok</span>
+                            {a.tools?.length > 0 && (
+                              <>
+                                <span>·</span>
+                                <span className="text-purple-600 font-medium">loop [{a.tools.join('+')}]</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>

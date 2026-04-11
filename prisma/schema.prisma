@@ -116,11 +116,13 @@ model Agent {
   baseUrl      String?  // nullable: only used when aiProviderId is null
   apiKey       String?
   model        String?  // nullable: only used when aiProviderId is null
-  systemPrompt String?
-  maxTokens    Int      @default(2048)
-  temperature  Float    @default(0.7)
-  extraConfig  Json     @default("{}") // e.g. { apiVersion: "2024-02-01" } for Azure
-  enabled      Boolean  @default(true)
+  systemPrompt  String?
+  maxTokens     Int      @default(2048)
+  temperature   Float    @default(0.7)
+  extraConfig   Json     @default("{}") // e.g. { apiVersion: "2024-02-01" } for Azure
+  tools         String[] @default([])   // enabled tool providers: ["bash", "playwright", "http", "file"]
+  maxIterations Int      @default(20)   // max agentic loop iterations
+  enabled       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -239,6 +241,10 @@ model LlmCall {
   // Parse výsledku
   parseSuccess     Boolean @default(false)
   parsedTransition String?
+
+  // Agentic loop metadata
+  iteration     Int     @default(1)  // kolo v loopu (single-shot = 1)
+  toolCallsJson String?              // JSON serializované tool calls z dané iterace
 
   createdAt DateTime @default(now())
 

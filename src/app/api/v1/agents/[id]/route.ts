@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params
   const body = await req.json().catch(() => ({}))
 
-  const allowed = ['name','description','apiToken','aiProviderId','provider','baseUrl','apiKey','model','systemPrompt','maxTokens','temperature','extraConfig','enabled'] as const
+  const allowed = ['name','description','apiToken','aiProviderId','provider','baseUrl','apiKey','model','systemPrompt','maxTokens','temperature','extraConfig','enabled','tools','maxIterations'] as const
   const data: Record<string, unknown> = {}
   for (const k of allowed) {
     if (k in body) data[k] = body[k] === '' ? null : body[k]

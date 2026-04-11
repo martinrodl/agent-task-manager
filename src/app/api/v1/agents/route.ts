@@ -46,8 +46,10 @@ export async function POST(req: NextRequest) {
       systemPrompt: body.systemPrompt ?? null,
       maxTokens:    body.maxTokens    ?? 2048,
       temperature:  body.temperature  ?? 0.7,
-      extraConfig:  body.extraConfig  ?? {},
-      enabled:      body.enabled      ?? true,
+      extraConfig:   body.extraConfig   ?? {},
+      enabled:       body.enabled       ?? true,
+      tools:         body.tools         ?? [],
+      maxIterations: body.maxIterations ?? 20,
     },
     include: { aiProvider: { select: { id: true, name: true, model: true, provider: true } } },
   })
