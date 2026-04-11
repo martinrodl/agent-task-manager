@@ -75,6 +75,32 @@ function callWithTools(
 
 // ─── Append tool results to history in provider-native format ─────────────────
 
+// If a tool result contains a screenshot (base64 PNG), format it as an image
+// content block so the LLM can visually inspect the page.
+function buildToolResultContent(
+  result: unknown,
+  isAnthropic: boolean,
+): unknown {
+  const r = result as Record<string, unknown>
+  const output = r?.output as Record<string, unknown> | undefined
+
+  if (
+    isAnthropic &&
+    output?.base64 &&
+    typeof output.base64 === 'string' &&
+    output.mimeType === 'image/png'
+  ) {
+    // Anthropic supports multi-content tool_result: text + image
+    return [
+      { type: 'text',  text: `Screenshot taken. URL: ${output.url ?? 'unknown'}` },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: output.base64 } },
+    ]
+  }
+
+  // Default: serialize as JSON string
+  return JSON.stringify(result)
+}
+
 function appendToolResults(
   messages:    unknown[],
   assistantRaw: unknown,
@@ -90,7 +116,7 @@ function appendToolResults(
       content: toolResults.map(tr => ({
         type:        'tool_result',
         tool_use_id: tr.id,
-        content:     JSON.stringify(tr.result),
+        content:     buildToolResultContent(tr.result, true),
       })),
     })
   } else {
@@ -100,7 +126,7 @@ function appendToolResults(
         role:         'tool',
         tool_call_id: tr.id,
         name:         tr.name,
-        content:      JSON.stringify(tr.result),
+        content:      JSON.stringify(tr.result),  // OpenAI doesn't support image in tool results
       })
     }
   }
