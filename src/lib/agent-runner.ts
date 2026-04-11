@@ -11,9 +11,88 @@
 
 import { prisma } from './prisma'
 import { callAgent } from './agent-connector'
-import { executeTransition } from './state-machine'
+import { executeTransition, LlmMeta } from './state-machine'
 import { emitTaskEvent } from './sse'
 import { startTimeoutWatcher } from './timeout-watcher'
+
+// ─── Langfuse integration (optional, fire-and-forget) ─────────────────────────
+// Active only when LANGFUSE_SECRET_KEY env var is set.
+// Uses Langfuse batch ingestion API directly — no SDK dependency.
+
+const LANGFUSE_BASE_URL   = process.env.LANGFUSE_BASE_URL   ?? 'https://cloud.langfuse.com'
+const LANGFUSE_SECRET_KEY = process.env.LANGFUSE_SECRET_KEY ?? ''
+const LANGFUSE_PUBLIC_KEY = process.env.LANGFUSE_PUBLIC_KEY ?? ''
+
+interface LangfusePayload {
+  traceId:         string
+  taskId:          string
+  agentName:       string
+  model:           string
+  provider:        string
+  systemPrompt:    string
+  userPrompt:      string
+  rawResponse:     string | null
+  success:         boolean
+  errorMessage:    string | null
+  latencyMs:       number
+  promptTokens:    number | null
+  completionTokens: number | null
+  parseSuccess:    boolean
+  parsedTransition: string | null
+}
+
+async function forwardToLangfuse(payload: LangfusePayload): Promise<void> {
+  if (!LANGFUSE_SECRET_KEY || !LANGFUSE_PUBLIC_KEY) return
+
+  const auth = Buffer.from(`${LANGFUSE_PUBLIC_KEY}:${LANGFUSE_SECRET_KEY}`).toString('base64')
+
+  const body = {
+    batch: [
+      {
+        id:        `${payload.traceId}-trace`,
+        type:      'trace-create',
+        timestamp: new Date().toISOString(),
+        body: {
+          id:   payload.traceId,
+          name: `agent-run/${payload.agentName}`,
+          metadata: { taskId: payload.taskId, agentName: payload.agentName, provider: payload.provider },
+          tags: ['agenttask', payload.agentName, payload.provider],
+        },
+      },
+      {
+        id:        `${payload.traceId}-gen`,
+        type:      'generation-create',
+        timestamp: new Date().toISOString(),
+        body: {
+          traceId: payload.traceId,
+          name:    'llm-call',
+          model:   payload.model,
+          input: { systemPrompt: payload.systemPrompt, userPrompt: payload.userPrompt },
+          output:  payload.rawResponse,
+          usage:   payload.promptTokens != null
+            ? { input: payload.promptTokens, output: payload.completionTokens ?? 0 }
+            : undefined,
+          latency:       payload.latencyMs / 1000,
+          level:         payload.success ? 'DEFAULT' : 'ERROR',
+          statusMessage: payload.errorMessage ?? undefined,
+          metadata: { parseSuccess: payload.parseSuccess, parsedTransition: payload.parsedTransition },
+        },
+      },
+    ],
+  }
+
+  try {
+    const res = await fetch(`${LANGFUSE_BASE_URL}/api/public/ingestion`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${auth}` },
+      body:    JSON.stringify(body),
+      signal:  AbortSignal.timeout(5_000),
+    })
+    if (!res.ok) console.warn(`[langfuse] Ingestion failed: ${res.status}`)
+  } catch (err) {
+    console.warn('[langfuse] Forward error:', err)
+  }
+}
 
 // Start background watcher on first agent import (server-side singleton)
 startTimeoutWatcher()
@@ -258,27 +337,61 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
   }
 
   // Call LLM
-  let response
+  const agentCfg = {
+    provider:    llmProvider,
+    baseUrl:     llmBaseUrl,
+    apiKey:      llmApiKey,
+    model:       llmModel,
+    maxTokens:   agentConfig.maxTokens,
+    temperature: agentConfig.temperature,
+    extraConfig: {
+      ...(agentConfig.extraConfig as Record<string, unknown>),
+      workspacePath: task.workflow.workspacePath || undefined,
+    },
+  }
+
+  let response: Awaited<ReturnType<typeof callAgent>> | undefined
+  let llmCallId: string | null = null
+  const t0 = Date.now()
+
   try {
-    response = await callAgent(
-      {
-        provider:    llmProvider,
-        baseUrl:     llmBaseUrl,
-        apiKey:      llmApiKey,
-        model:       llmModel,
-        maxTokens:   agentConfig.maxTokens,
-        temperature: agentConfig.temperature,
-        extraConfig: {
-          ...(agentConfig.extraConfig as Record<string, unknown>),
-          // Pass workspace path so claude-code subprocess runs in the right directory
-          workspacePath: task.workflow.workspacePath || undefined,
-        },
-      },
-      messages
-    )
+    response = await callAgent(agentCfg, messages)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[agent-runner] LLM call failed for agent "${agentName}":`, err)
+
+    // Uložit chybný LlmCall
+    const systemPromptStr = messages.find(m => m.role === 'system')?.content ?? ''
+    const userPromptStr   = messages.find(m => m.role === 'user')?.content ?? ''
+    const failedLatency   = Date.now() - t0
+
+    const failedCall = await prisma.llmCall.create({
+      data: {
+        taskId,
+        agentName,
+        provider:     llmProvider,
+        model:        llmModel,
+        systemPrompt: systemPromptStr,
+        userPrompt:   userPromptStr,
+        latencyMs:    failedLatency,
+        success:      false,
+        errorMessage: msg,
+        parseSuccess: false,
+      },
+    }).catch(() => null)
+    llmCallId = failedCall?.id ?? null
+
+    forwardToLangfuse({
+      traceId:         llmCallId ?? `err-${taskId}`,
+      taskId,          agentName,
+      model:           llmModel,    provider: llmProvider,
+      systemPrompt:    systemPromptStr, userPrompt: userPromptStr,
+      rawResponse:     null,        success: false,
+      errorMessage:    msg,         latencyMs: failedLatency,
+      promptTokens:    null,        completionTokens: null,
+      parseSuccess:    false,       parsedTransition: null,
+    }).catch(() => {})
+
     await recordAgentError(taskId, agentName, `LLM call failed: ${msg}`)
     return
   }
@@ -287,6 +400,43 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
 
   // Parse output
   const output = parseOutput(response.content)
+  const parseSuccess = output !== null
+
+  const systemPromptStr = messages.find(m => m.role === 'system')?.content ?? ''
+  const userPromptStr   = messages.find(m => m.role === 'user')?.content ?? ''
+
+  // Uložit LlmCall
+  const llmCallRecord = await prisma.llmCall.create({
+    data: {
+      taskId,
+      agentName,
+      provider:         llmProvider,
+      model:            llmModel,
+      systemPrompt:     systemPromptStr,
+      userPrompt:       userPromptStr,
+      rawResponse:      response.content,
+      latencyMs:        response.latencyMs,
+      success:          true,
+      promptTokens:     response.usage?.prompt_tokens ?? null,
+      completionTokens: response.usage?.completion_tokens ?? null,
+      parseSuccess,
+      parsedTransition: output?.transitionName ?? null,
+    },
+  }).catch(() => null)
+  llmCallId = llmCallRecord?.id ?? null
+
+  forwardToLangfuse({
+    traceId:          llmCallId ?? `ok-${taskId}`,
+    taskId,           agentName,
+    model:            llmModel,     provider: llmProvider,
+    systemPrompt:     systemPromptStr, userPrompt: userPromptStr,
+    rawResponse:      response.content, success: true,
+    errorMessage:     null,         latencyMs: response.latencyMs,
+    promptTokens:     response.usage?.prompt_tokens ?? null,
+    completionTokens: response.usage?.completion_tokens ?? null,
+    parseSuccess,     parsedTransition: output?.transitionName ?? null,
+  }).catch(() => {})
+
   if (!output) {
     const preview = response.content.slice(0, 200)
     console.error(`[agent-runner] Could not parse JSON from LLM response: ${preview}`)
@@ -301,16 +451,34 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
     return
   }
 
-  // Execute transition
+  // Execute transition s LLM metadaty
   try {
-    await executeTransition(
+    const transitionResult = await executeTransition(
       taskId,
       output.transitionName,
       agentName,
       'agent',
       output.comment,
       output.result,
+      {
+        llmCallId,
+        model:           llmModel,
+        provider:        llmProvider,
+        latencyMs:       response.latencyMs,
+        promptTokens:    response.usage?.prompt_tokens,
+        completionTokens: response.usage?.completion_tokens,
+        parseSuccess,
+      },
     )
+
+    // Zpětně doplnit taskEventId do LlmCall
+    if (llmCallRecord?.id && transitionResult.event?.id) {
+      await prisma.llmCall.update({
+        where: { id: llmCallRecord.id },
+        data:  { taskEventId: transitionResult.event.id },
+      }).catch(() => {})
+    }
+
     console.log(`[agent-runner] Transition "${output.transitionName}" executed for task ${taskId}`)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

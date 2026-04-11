@@ -192,6 +192,7 @@ model Task {
   parent   Task?         @relation("Subtasks", fields: [parentId], references: [id])
   subtasks Task[]        @relation("Subtasks")
   events   TaskEvent[]
+  llmCalls LlmCall[]
 }
 
 model TaskEvent {
@@ -208,4 +209,39 @@ model TaskEvent {
   task      Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
   fromState WorkflowState? @relation("EventFromState", fields: [fromStateId], references: [id])
   toState   WorkflowState? @relation("EventToState", fields: [toStateId], references: [id])
+  llmCall   LlmCall?
+}
+
+model LlmCall {
+  id          String   @id @default(cuid())
+
+  // Vazby
+  taskId      String
+  taskEventId String?  @unique
+  agentName   String
+
+  // LLM context
+  provider    String
+  model       String
+  systemPrompt String
+  userPrompt   String
+
+  // Výsledek
+  rawResponse  String?
+  success      Boolean  @default(false)
+  errorMessage String?
+
+  // Metriky
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int
+
+  // Parse výsledku
+  parseSuccess     Boolean @default(false)
+  parsedTransition String?
+
+  createdAt DateTime @default(now())
+
+  task      Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskEvent TaskEvent? @relation(fields: [taskEventId], references: [id], onDelete: SetNull)
 }

@@ -77,6 +77,16 @@ export async function getAvailableTransitions(taskId: string, actorType: ActorTy
 
 // ─── Execute transition ───────────────────────────────────────────────────────
 
+export interface LlmMeta {
+  llmCallId?:        string | null
+  model?:            string
+  provider?:         string
+  latencyMs?:        number
+  promptTokens?:     number
+  completionTokens?: number
+  parseSuccess?:     boolean
+}
+
 export async function executeTransition(
   taskId: string,
   transitionName: string,
@@ -84,6 +94,7 @@ export async function executeTransition(
   actorType: ActorType,
   comment?: string,
   result?: unknown,
+  llmMeta?: LlmMeta,
 ): Promise<TransitionResult> {
   const task = await prisma.task.findUniqueOrThrow({
     where: { id: taskId },
@@ -135,7 +146,18 @@ export async function executeTransition(
         actor,
         actorType,
         comment: comment ?? null,
-        metadata: { transitionName },
+        metadata: {
+          transitionName,
+          ...(llmMeta ? {
+            llmCallId:        llmMeta.llmCallId ?? undefined,
+            model:            llmMeta.model,
+            provider:         llmMeta.provider,
+            latencyMs:        llmMeta.latencyMs,
+            promptTokens:     llmMeta.promptTokens,
+            completionTokens: llmMeta.completionTokens,
+            parseSuccess:     llmMeta.parseSuccess,
+          } : {}),
+        },
       },
     }),
   ])

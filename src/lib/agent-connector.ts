@@ -31,8 +31,9 @@ export interface ChatMessage {
 }
 
 export interface ChatResponse {
-  content: string
-  usage?:  { prompt_tokens: number; completion_tokens: number }
+  content:   string
+  latencyMs: number
+  usage?:    { prompt_tokens: number; completion_tokens: number }
 }
 
 // ─── Per-provider URL + headers ──────────────────────────────────────────────
@@ -89,6 +90,7 @@ function resolveEndpoint(cfg: AgentConfig): { url: string; headers: Record<strin
 
 async function callOllama(cfg: AgentConfig, messages: ChatMessage[]): Promise<ChatResponse> {
   const { url, headers } = resolveEndpoint(cfg)
+  const t0 = Date.now()
 
   const res = await fetch(url, {
     method: 'POST',
@@ -107,13 +109,20 @@ async function callOllama(cfg: AgentConfig, messages: ChatMessage[]): Promise<Ch
   }
 
   const data = await res.json()
-  return { content: data.message?.content ?? '' }
+  return {
+    content:   data.message?.content ?? '',
+    latencyMs: Date.now() - t0,
+    usage: data.prompt_eval_count !== undefined
+      ? { prompt_tokens: data.prompt_eval_count, completion_tokens: data.eval_count ?? 0 }
+      : undefined,
+  }
 }
 
 // ─── OpenAI-compatible (covers openai/azure/openrouter/lmstudio/webui/custom) ─
 
 async function callOpenAICompat(cfg: AgentConfig, messages: ChatMessage[]): Promise<ChatResponse> {
   const { url, headers } = resolveEndpoint(cfg)
+  const t0 = Date.now()
 
   const body: Record<string, unknown> = {
     messages,
@@ -138,10 +147,10 @@ async function callOpenAICompat(cfg: AgentConfig, messages: ChatMessage[]): Prom
   }
 
   const data = await res.json()
-  const content = data.choices?.[0]?.message?.content ?? ''
   return {
-    content,
-    usage: data.usage,
+    content:   data.choices?.[0]?.message?.content ?? '',
+    latencyMs: Date.now() - t0,
+    usage:     data.usage,
   }
 }
 
@@ -153,12 +162,13 @@ async function callAnthropic(cfg: AgentConfig, messages: ChatMessage[]): Promise
   const baseUrl = cfg.baseUrl?.replace(/\/$/, '') || 'https://api.anthropic.com'
   const systemMsg = messages.find(m => m.role === 'system')?.content
   const chatMsgs  = messages.filter(m => m.role !== 'system')
+  const t0 = Date.now()
 
   const res = await fetch(`${baseUrl}/v1/messages`, {
     method: 'POST',
     headers: {
-      'Content-Type':    'application/json',
-      'x-api-key':       cfg.apiKey ?? '',
+      'Content-Type':      'application/json',
+      'x-api-key':         cfg.apiKey ?? '',
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
@@ -176,8 +186,11 @@ async function callAnthropic(cfg: AgentConfig, messages: ChatMessage[]): Promise
 
   const data = await res.json()
   return {
-    content: data.content?.[0]?.text ?? '',
-    usage: data.usage ? { prompt_tokens: data.usage.input_tokens, completion_tokens: data.usage.output_tokens } : undefined,
+    content:   data.content?.[0]?.text ?? '',
+    latencyMs: Date.now() - t0,
+    usage: data.usage
+      ? { prompt_tokens: data.usage.input_tokens, completion_tokens: data.usage.output_tokens }
+      : undefined,
   }
 }
 
@@ -197,6 +210,7 @@ function callClaudeCode(cfg: AgentConfig, messages: ChatMessage[]): Promise<Chat
 
   const claudeBin  = cfg.baseUrl?.trim() || 'claude'
   const cwd        = (cfg.extraConfig?.workspacePath as string | undefined) || process.cwd()
+  const t0         = Date.now()
 
   const args: string[] = ['--print']
   if (cfg.model && cfg.model !== 'default') args.push('--model', cfg.model)
@@ -218,7 +232,7 @@ function callClaudeCode(cfg: AgentConfig, messages: ChatMessage[]): Promise<Chat
     child.on('close', (code) => {
       clearTimeout(timer)
       if (code !== 0) reject(new Error(`claude exited ${code}: ${stderr.slice(0, 300)}`))
-      else resolve({ content: stdout.trim() })
+      else resolve({ content: stdout.trim(), latencyMs: Date.now() - t0 })
     })
 
     child.stdin.write(fullPrompt)
