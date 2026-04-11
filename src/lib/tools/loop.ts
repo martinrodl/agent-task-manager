@@ -135,7 +135,13 @@ export async function agenticLoop(
   let iterations      = 0
   let lastLlmCallId: string | null = null
 
-  await setupProviders(providerNames, context)
+  try {
+    await setupProviders(providerNames, context)
+  } catch (setupErr) {
+    const msg = setupErr instanceof Error ? setupErr.message : String(setupErr)
+    console.error('[agentic-loop] Provider setup failed:', msg)
+    return { output: null, iterations: 0, totalLatencyMs: 0, lastError: `Tool provider setup failed: ${msg}`, lastLlmCallId: null }
+  }
 
   try {
     while (iterations < opts.maxIterations) {

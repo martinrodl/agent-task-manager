@@ -366,20 +366,28 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
       ),
     }
 
-    const loopResult = await agenticLoop(
-      agentCfg,
-      messages,
-      agentTools,
-      context,
-      {
-        maxIterations: agentConfig.maxIterations,
-        taskId,
-        agentName,
-        provider:      llmProvider,
-        model:         llmModel,
-        systemPrompt:  systemPrompt,
-      },
-    )
+    let loopResult: Awaited<ReturnType<typeof agenticLoop>>
+    try {
+      loopResult = await agenticLoop(
+        agentCfg,
+        messages,
+        agentTools,
+        context,
+        {
+          maxIterations: agentConfig.maxIterations ?? 20,
+          taskId,
+          agentName,
+          provider:      llmProvider,
+          model:         llmModel,
+          systemPrompt:  systemPrompt,
+        },
+      )
+    } catch (loopErr) {
+      const msg = loopErr instanceof Error ? loopErr.message : String(loopErr)
+      console.error(`[agent-runner] agenticLoop threw:`, loopErr)
+      await recordAgentError(taskId, agentName, `Agentic loop error: ${msg}`)
+      return
+    }
 
     console.log(`[agent-runner] Loop finished: ${loopResult.iterations} iteration(s), ${loopResult.totalLatencyMs}ms`)
 
