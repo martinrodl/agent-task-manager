@@ -100,8 +100,11 @@ export class PlaywrightProvider implements ToolProvider {
 
   async setup(context: ToolContext): Promise<void> {
     try {
+      // Use require() — playwright is a CJS module; dynamic import() can return
+      // undefined named exports when running inside Next.js compiled context.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { chromium } = await (Function('return import("playwright")')() as Promise<{ chromium: PwBrowser }>)
+      const pw = require('playwright') as { chromium: PwBrowser }
+      const chromium = pw.chromium
       const browser = await chromium.launch({ headless: true })
       const ctx     = await browser.newContext({
         viewport:  { width: 1280, height: 720 },
