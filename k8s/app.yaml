@@ -21,15 +21,30 @@ spec:
         - containerPort: 3000
         env:
         - name: DATABASE_URL
-          value: "postgresql://agenttask:secret@agent-task-db:5432/agenttask"
+          valueFrom:
+            secretKeyRef:
+              name: agenttask-secrets
+              key: DATABASE_URL
         - name: SECRET_KEY
-          value: "change-me-in-production"
+          valueFrom:
+            secretKeyRef:
+              name: agenttask-secrets
+              key: SECRET_KEY
         - name: ADMIN_PASSWORD
-          value: "admin"
+          valueFrom:
+            secretKeyRef:
+              name: agenttask-secrets
+              key: ADMIN_PASSWORD
         - name: AGENT_API_KEY
-          value: "agent-key-change-me"
+          valueFrom:
+            secretKeyRef:
+              name: agenttask-secrets
+              key: AGENT_API_KEY
         - name: ORCHESTRATOR_API_KEY
-          value: "orchestrator-key-change-me"
+          valueFrom:
+            secretKeyRef:
+              name: agenttask-secrets
+              key: ORCHESTRATOR_API_KEY
 ---
 apiVersion: v1
 kind: Service
