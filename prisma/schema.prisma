@@ -36,6 +36,7 @@ model Workflow {
   sandboxMode     String?  // null/"none" = unrestricted | "docker" = isolated container per task
   dockerImage     String?  // docker image to use e.g. "node:20-slim", "mcr.microsoft.com/playwright"
   gitCloneUrl     String?  // if set: git clone this repo into container workspace on task start
+  setupScript     String?  // bash script run on HOST before agent starts (can spin up service containers)
 
   // Webhook — called on every state transition (e.g. to trigger CI/CD or sandbox deployment)
   webhookUrl      String?  // POST target, receives TaskTransitionEvent JSON

@@ -373,10 +373,11 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
   if (agentTools.length > 0) {
     console.log(`[agent-runner] Using agentic loop with tools: [${agentTools.join(', ')}]`)
 
-    const sandboxMode  = (task.workflow as Record<string, unknown>).sandboxMode as string | null ?? null
-    const dockerImage  = (task.workflow as Record<string, unknown>).dockerImage as string | null ?? null
+    const sandboxMode  = (task.workflow as Record<string, unknown>).sandboxMode  as string | null ?? null
+    const dockerImage  = (task.workflow as Record<string, unknown>).dockerImage  as string | null ?? null
+    const setupScript  = (task.workflow as Record<string, unknown>).setupScript  as string | null ?? null
     const taskWorkspaceDir = await createTaskWorkspaceDir(taskId, task.workflow.workspacePath ?? null)
-    console.log(`[agent-runner] Task workspace: ${taskWorkspaceDir}, sandbox: ${sandboxMode ?? 'none'}`)
+    console.log(`[agent-runner] Task workspace: ${taskWorkspaceDir}, sandbox: ${sandboxMode ?? 'none'}${setupScript ? ', setupScript: yes' : ''}`)
 
     const context = {
       taskId,
@@ -384,6 +385,7 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
       taskWorkspaceDir,
       sandboxMode,
       dockerImage,
+      setupScript,
       envVars:          Object.fromEntries(
         agentConfig.envVars.map(ae => [ae.envVar.key, ae.envVar.value])
       ),

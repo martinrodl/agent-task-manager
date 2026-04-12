@@ -85,6 +85,7 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
                 sandboxMode:   workflow.sandboxMode,
                 dockerImage:   workflow.dockerImage,
                 gitCloneUrl:   workflow.gitCloneUrl,
+                setupScript:   workflow.setupScript,
               }}
               initialStates={workflow.states.map(s => ({
                 id: s.id, name: s.name, label: s.label, color: s.color,

@@ -57,11 +57,37 @@ export class BashProvider implements ToolProvider {
     },
   ]
 
-  // Called once per task — start Docker container if sandbox mode is docker
+  // Called once per task — runs setupScript on HOST then starts sandbox container
   async setup(context: ToolContext): Promise<void> {
+    // 1. Run setupScript on HOST (starts service containers, sets up env, etc.)
+    if (context.setupScript) {
+      console.log(`[bash] Running setupScript for task ${context.taskId}`)
+      try {
+        const cwd = context.taskWorkspaceDir ?? context.workspacePath ?? process.cwd()
+        const { stdout, stderr } = await execAsync(context.setupScript, {
+          cwd,
+          timeout:   120_000,   // 2 min for service startup
+          shell:     '/bin/bash',
+          env: {
+            ...process.env,
+            ...context.envVars,
+            TASK_ID:        context.taskId,
+            WORKSPACE_PATH: context.workspacePath ?? '',
+          },
+          maxBuffer: 2 * 1024 * 1024,
+        })
+        if (stdout.trim()) console.log(`[bash:setup] stdout:\n${stdout.trim()}`)
+        if (stderr.trim()) console.log(`[bash:setup] stderr:\n${stderr.trim()}`)
+      } catch (err: unknown) {
+        const e = err as { stdout?: string; stderr?: string; message?: string }
+        const detail = [e.stderr?.trim(), e.stdout?.trim()].filter(Boolean).join('\n')
+        throw new Error(`setupScript failed: ${e.message ?? 'unknown error'}\n${detail}`)
+      }
+    }
+
+    // 2. Start agent sandbox container if docker mode
     if (context.sandboxMode !== 'docker') return
 
-    // Check docker is available
     await execAsync('docker info', { timeout: 5_000 }).catch(() => {
       throw new Error('Docker sandbox mode requires Docker to be running. Run `docker info` to check.')
     })
@@ -71,12 +97,33 @@ export class BashProvider implements ToolProvider {
     console.log(`[bash] Docker container started: ${containerId.slice(0, 12)} (image: ${context.dockerImage ?? 'node:20-slim'})`)
   }
 
-  // Called once per task — stop container on completion
+  // Called once per task — stop sandbox container + cleanup service containers from setupScript
   async teardown(context: ToolContext): Promise<void> {
-    if (context.sandboxMode !== 'docker' || !context.dockerContainerId) return
-    await stopContainer(context.dockerContainerId)
-    console.log(`[bash] Docker container stopped: ${context.dockerContainerId.slice(0, 12)}`)
-    delete context.dockerContainerId
+    // Stop the agent's own sandbox container
+    if (context.sandboxMode === 'docker' && context.dockerContainerId) {
+      await stopContainer(context.dockerContainerId)
+      console.log(`[bash] Docker container stopped: ${context.dockerContainerId.slice(0, 12)}`)
+      delete context.dockerContainerId
+    }
+
+    // Auto-cleanup service containers started by setupScript.
+    // Convention: containers are named "${TASK_ID}-<service>" (e.g. "cmxyz-db", "cmxyz-be").
+    if (context.setupScript) {
+      try {
+        const { stdout } = await execAsync(
+          `docker ps -aq --filter "name=${context.taskId}-"`,
+          { timeout: 5_000 },
+        ).catch(() => ({ stdout: '' }))
+        const ids = stdout.trim().split('\n').filter(Boolean)
+        if (ids.length > 0) {
+          await execAsync(`docker stop ${ids.join(' ')}`, { timeout: 30_000 }).catch(() => {})
+          await execAsync(`docker rm   ${ids.join(' ')}`, { timeout: 10_000 }).catch(() => {})
+          console.log(`[bash] Cleaned up ${ids.length} service container(s) for task ${context.taskId}`)
+        }
+      } catch {
+        // non-critical — containers may already be stopped
+      }
+    }
   }
 
   async execute(_toolName: string, args: unknown, context: ToolContext): Promise<ToolResult> {

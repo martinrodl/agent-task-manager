@@ -86,13 +86,31 @@ Replace `/absolute/path/to/mcp-server` with the real path and `agent-key-change-
 
 ### Available MCP tools
 
+**Task & project operations** (any authenticated agent):
+
 | Tool | Description |
 |------|-------------|
-| `list_tasks` | List tasks with optional filters (workflow, assignee, blocking) |
+| `list_tasks` | List tasks — filter by workflow, assignee, blocking |
 | `get_task` | Full task detail + available transitions |
-| `transition_task` | Execute a transition (do work → mark done / send for review) |
+| `transition_task` | Execute a state transition with comment + result JSON |
 | `add_comment` | Add a progress comment without changing state |
-| `list_workflows` | List all workflows |
+| `create_task` | Create a new task in a workflow |
+| `list_workflows` | List workflows, optionally filter by project |
+| `list_projects` | List all projects |
+| `create_project` | Create a project (name, slug, description, color) |
+| `create_workflow` | Create a complete workflow with states + transitions in one call |
+| `get_analytics_summary` | LLM call stats: success rate, token usage, daily trend |
+| `list_llm_calls` | Per-call log with latency, tokens, errors |
+
+**Admin operations** (require `AGENTTASK_ADMIN_PASSWORD` env var on MCP server):
+
+| Tool | Description |
+|------|-------------|
+| `list_agents` / `get_agent` | List or inspect agents |
+| `create_agent` / `update_agent` | Create or update agent config (model, tools, system prompt) |
+| `list_env_vars` / `create_env_var` / `delete_env_var` | Manage secrets / API keys |
+| `get_agent_env_vars` / `set_agent_env_vars` | Assign env vars to agents |
+| `update_workflow` | Update sandbox, workspace, webhook, `setupScript` |
 
 ### Example session
 
@@ -102,6 +120,111 @@ Claude: [lists tasks assigned to claude-code]
 
 You: work on task cma1b2c3d
 Claude: [reads task, implements feature, transitions to pending_review]
+```
+
+### Remote HTTP MCP server (for Gemini CLI, remote Claude, other LLMs)
+
+```bash
+cd apps/agenttask/mcp-server && npm install
+
+MCP_SECRET=your-strong-secret \
+AGENTTASK_URL=http://localhost:3000 \
+AGENTTASK_API_KEY=agent-key-change-me \
+AGENTTASK_ADMIN_PASSWORD=your-admin-password \
+MCP_PORT=4040 \
+npx tsx http-server.ts
+```
+
+Client config (any MCP-compatible LLM):
+```json
+{
+  "mcpServers": {
+    "agenttask": {
+      "url": "https://mcp.yourdomain.com/mcp",
+      "headers": { "Authorization": "Bearer your-strong-secret" }
+    }
+  }
+}
+```
+
+---
+
+## Agentic loop — agents with tools
+
+When an agent has `tools` configured, it runs an **agentic loop** instead of a single LLM call:
+
+1. LLM receives task prompt + available tool definitions
+2. LLM calls tools (bash commands, HTTP requests, browser automation, file reads/writes)
+3. Tool results fed back to LLM
+4. Repeat until LLM outputs final `{ transitionName, comment, result }` JSON
+
+### Tool providers
+
+| Provider | Tools | Description |
+|----------|-------|-------------|
+| `bash` | `bash_run` | Execute bash commands — on server or in isolated Docker container |
+| `playwright` | `playwright_navigate`, `playwright_click`, `playwright_fill`, `playwright_screenshot`, `playwright_get_text`, `playwright_evaluate`, `playwright_wait_for` | Browser automation — screenshots are displayed in task detail UI |
+| `http` | `http_request` | Make HTTP requests (GET/POST/PUT/DELETE/PATCH) |
+| `file` | `read_file`, `write_file`, `list_files` | Read/write files in workspace |
+
+Configure tools on an agent: set the `tools` array e.g. `["bash", "playwright_navigate", "playwright_screenshot"]`.
+
+---
+
+## Workflow sandbox & setup script
+
+### Sandbox modes
+
+| Mode | Description |
+|------|-------------|
+| `null` (none) | Agent runs bash commands directly on the server |
+| `"docker"` | One isolated container per task — stateful across tool calls, auto-removed on task end |
+
+Docker container mounts a per-task `/workspace` scratch dir and the workflow path read-only. Uses `--network=host` so it can reach services on localhost.
+
+### Setup script — multi-service environments
+
+`setupScript` is a bash script run **on the HOST** before the agent starts. It solves the problem of testing projects that require multiple services (database + API + frontend).
+
+**Available env vars in the script:**
+- `TASK_ID` — unique task identifier
+- `WORKSPACE_PATH` — workflow workspace path
+- All agent env vars (your secrets, API keys, etc.)
+
+**Auto-cleanup**: containers named `${TASK_ID}-<anything>` are automatically stopped and removed when the task finishes.
+
+**Example — testing stock-screener (Next.js frontend + NestJS API + PostgreSQL):**
+
+```bash
+# Create network for this task
+docker network create "${TASK_ID}-net" 2>/dev/null || true
+
+# Database
+docker run -d --name "${TASK_ID}-db" --network "${TASK_ID}-net" \
+  -e POSTGRES_PASSWORD=test postgres:16-alpine
+
+# Backend API
+docker run -d --name "${TASK_ID}-be" --network "${TASK_ID}-net" \
+  -e DATABASE_URL="postgresql://postgres:test@${TASK_ID}-db:5432/app" \
+  -p 3001:3001 \
+  my-registry/stock-screener-api:latest
+
+# Frontend
+docker run -d --name "${TASK_ID}-web" \
+  -e NEXT_PUBLIC_API_URL=http://localhost:3001 \
+  -p 3099:3000 \
+  my-registry/stock-screener-web:latest
+
+# Wait for services to start
+sleep 8
+```
+
+The agent (with `playwright_navigate` tool) then tests at `http://localhost:3099`.
+
+**If the project has docker-compose.yml:**
+```bash
+cd "${WORKSPACE_PATH}"
+COMPOSE_PROJECT_NAME="${TASK_ID}" docker-compose up -d
 ```
 
 ---

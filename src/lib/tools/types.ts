@@ -29,6 +29,7 @@ export interface ToolContext {
   sandboxMode:      string | null   // null/"none" | "docker"
   dockerImage:      string | null   // docker image for sandbox mode
   dockerContainerId?: string        // set after container is started (stateful mode)
+  setupScript:      string | null   // bash script run on HOST before agent starts (can spin up service containers)
 }
 
 export interface ToolResult {

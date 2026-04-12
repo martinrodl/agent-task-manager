@@ -34,6 +34,7 @@ interface Workflow {
   sandboxMode?: string | null
   dockerImage?: string | null
   gitCloneUrl?: string | null
+  setupScript?: string | null
 }
 
 export function WorkflowBuilder({
@@ -61,6 +62,7 @@ export function WorkflowBuilder({
   const [sandboxMode, setSandboxMode] = useState(workflow.sandboxMode ?? '')
   const [dockerImage, setDockerImage] = useState(workflow.dockerImage ?? '')
   const [gitCloneUrl, setGitCloneUrl] = useState(workflow.gitCloneUrl ?? '')
+  const [setupScript, setSetupScript] = useState(workflow.setupScript ?? '')
   const [projectId, setProjectId]     = useState(workflow.projectId ?? '')
   const [projects, setProjects]       = useState<{ id: string; name: string; color: string }[]>([])
   const [states, setStates]           = useState<State[]>(initialStates)
@@ -221,6 +223,7 @@ export function WorkflowBuilder({
           sandboxMode:   sandboxMode   || null,
           dockerImage:   sandboxMode === 'docker' ? dockerImage  || null : null,
           gitCloneUrl:   sandboxMode === 'docker' ? gitCloneUrl  || null : null,
+          setupScript:   setupScript   || null,
         }),
       })
 
@@ -465,6 +468,23 @@ export function WorkflowBuilder({
               Agents execute bash commands directly on the server in the workspace path above. Per-task scratch dirs are created automatically under <code className="bg-gray-100 px-1 rounded">.agent-workspaces/&#123;taskId&#125;</code>.
             </p>
           )}
+
+          {/* Setup script — always visible */}
+          <div className="border-t border-gray-100 pt-3">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Setup script <span className="font-normal text-gray-400">— bash, runs on HOST before agent starts</span>
+            </label>
+            <textarea
+              value={setupScript}
+              onChange={e => setSetupScript(e.target.value)}
+              rows={6}
+              placeholder={`# Available env vars: TASK_ID, WORKSPACE_PATH, plus any agent env vars\n# Name containers \${TASK_ID}-<service> for automatic cleanup after task\n\n# Example: start a Postgres + app for testing\ndocker network create "\${TASK_ID}-net" 2>/dev/null || true\ndocker run -d --name "\${TASK_ID}-db" --network "\${TASK_ID}-net" \\\n  -e POSTGRES_PASSWORD=test postgres:16-alpine\ndocker run -d --name "\${TASK_ID}-web" --network "\${TASK_ID}-net" \\\n  -p 3099:3000 -e DATABASE_URL=postgresql://postgres:test@db:5432/app \\\n  myapp:latest`}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-0.5">
+              Containers named <code className="bg-gray-100 px-1 rounded">{"${TASK_ID}-*"}</code> are stopped automatically when the task finishes. Uses <code className="bg-gray-100 px-1 rounded">--network=host</code> for the agent container so it can reach services on <code className="bg-gray-100 px-1 rounded">localhost</code>.
+            </p>
+          </div>
         </div>
 
         {/* Webhook */}
