@@ -31,6 +31,9 @@ interface Workflow {
   githubToken?: string | null
   webhookUrl?: string | null
   webhookSecret?: string | null
+  sandboxMode?: string | null
+  dockerImage?: string | null
+  gitCloneUrl?: string | null
 }
 
 export function WorkflowBuilder({
@@ -55,6 +58,9 @@ export function WorkflowBuilder({
   const [ghToken, setGhToken]         = useState(workflow.githubToken ?? '')
   const [webhookUrl, setWebhookUrl]   = useState(workflow.webhookUrl ?? '')
   const [webhookSecret, setWebhookSecret] = useState(workflow.webhookSecret ?? '')
+  const [sandboxMode, setSandboxMode] = useState(workflow.sandboxMode ?? '')
+  const [dockerImage, setDockerImage] = useState(workflow.dockerImage ?? '')
+  const [gitCloneUrl, setGitCloneUrl] = useState(workflow.gitCloneUrl ?? '')
   const [projectId, setProjectId]     = useState(workflow.projectId ?? '')
   const [projects, setProjects]       = useState<{ id: string; name: string; color: string }[]>([])
   const [states, setStates]           = useState<State[]>(initialStates)
@@ -212,6 +218,9 @@ export function WorkflowBuilder({
           githubToken:   wsType === 'github' ? ghToken  || null : null,
           webhookUrl:    webhookUrl    || null,
           webhookSecret: webhookSecret || null,
+          sandboxMode:   sandboxMode   || null,
+          dockerImage:   sandboxMode === 'docker' ? dockerImage  || null : null,
+          gitCloneUrl:   sandboxMode === 'docker' ? gitCloneUrl  || null : null,
         }),
       })
 
@@ -392,6 +401,69 @@ export function WorkflowBuilder({
                 </p>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Sandbox */}
+        <div className="border-t border-gray-100 pt-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium text-gray-700">Sandbox</h3>
+            <span className="text-xs text-gray-400">— agent isolation mode</span>
+          </div>
+
+          <div className="flex gap-2">
+            {[
+              { value: '',       label: 'None',   icon: '—', desc: 'Agent runs directly on server' },
+              { value: 'docker', label: 'Docker', icon: '🐳', desc: 'Isolated container per task' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setSandboxMode(opt.value)}
+                title={opt.desc}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors
+                  ${sandboxMode === opt.value
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+              >
+                {opt.icon} {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {sandboxMode === 'docker' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Docker image <span className="text-gray-400">(default: node:20-slim)</span>
+                </label>
+                <input
+                  value={dockerImage}
+                  onChange={e => setDockerImage(e.target.value)}
+                  placeholder="node:20-slim  or  mcr.microsoft.com/playwright:v1.49.0-noble"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Container mounts a per-task <code className="bg-gray-100 px-1 rounded">/workspace</code> dir and the workflow path read-only. Uses <code className="bg-gray-100 px-1 rounded">--network=host</code>.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Git clone URL <span className="text-gray-400">(optional — cloned into /workspace on task start)</span>
+                </label>
+                <input
+                  value={gitCloneUrl}
+                  onChange={e => setGitCloneUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo.git"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {!sandboxMode && (
+            <p className="text-xs text-gray-400">
+              Agents execute bash commands directly on the server in the workspace path above. Per-task scratch dirs are created automatically under <code className="bg-gray-100 px-1 rounded">.agent-workspaces/&#123;taskId&#125;</code>.
+            </p>
           )}
         </div>
 
