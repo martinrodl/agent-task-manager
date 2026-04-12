@@ -22,9 +22,13 @@ export interface ToolDefinition {
 }
 
 export interface ToolContext {
-  taskId:        string
-  workspacePath: string | null
-  envVars:       Record<string, string>
+  taskId:           string
+  workspacePath:    string | null   // workflow-level shared path (e.g. /srv/projects/myapp)
+  taskWorkspaceDir: string | null   // per-task isolated scratch dir (auto-created)
+  envVars:          Record<string, string>
+  sandboxMode:      string | null   // null/"none" | "docker"
+  dockerImage:      string | null   // docker image for sandbox mode
+  dockerContainerId?: string        // set after container is started (stateful mode)
 }
 
 export interface ToolResult {

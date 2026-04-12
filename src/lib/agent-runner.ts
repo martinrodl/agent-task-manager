@@ -15,6 +15,21 @@ import { executeTransition, LlmMeta } from './state-machine'
 import { emitTaskEvent } from './sse'
 import { startTimeoutWatcher } from './timeout-watcher'
 import { agenticLoop } from './tools/loop'
+import fs from 'fs/promises'
+import path from 'path'
+
+// ─── Per-task workspace directory ────────────────────────────────────────────
+// Agents get an isolated scratch dir under the workflow's workspacePath (or /tmp).
+// It's created on agent start and can be cleaned up after terminal state.
+
+async function createTaskWorkspaceDir(taskId: string, workspacePath: string | null): Promise<string> {
+  const base = workspacePath
+    ? path.join(workspacePath, '.agent-workspaces')
+    : path.join('/tmp', 'agenttask-workspaces')
+  const dir = path.join(base, taskId)
+  await fs.mkdir(dir, { recursive: true })
+  return dir
+}
 
 // ─── Langfuse integration (optional, fire-and-forget) ─────────────────────────
 // Active only when LANGFUSE_SECRET_KEY env var is set.
@@ -358,10 +373,18 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
   if (agentTools.length > 0) {
     console.log(`[agent-runner] Using agentic loop with tools: [${agentTools.join(', ')}]`)
 
+    const sandboxMode  = (task.workflow as Record<string, unknown>).sandboxMode as string | null ?? null
+    const dockerImage  = (task.workflow as Record<string, unknown>).dockerImage as string | null ?? null
+    const taskWorkspaceDir = await createTaskWorkspaceDir(taskId, task.workflow.workspacePath ?? null)
+    console.log(`[agent-runner] Task workspace: ${taskWorkspaceDir}, sandbox: ${sandboxMode ?? 'none'}`)
+
     const context = {
-      taskId:        taskId,
-      workspacePath: task.workflow.workspacePath ?? null,
-      envVars:       Object.fromEntries(
+      taskId,
+      workspacePath:    task.workflow.workspacePath ?? null,
+      taskWorkspaceDir,
+      sandboxMode,
+      dockerImage,
+      envVars:          Object.fromEntries(
         agentConfig.envVars.map(ae => [ae.envVar.key, ae.envVar.value])
       ),
     }
