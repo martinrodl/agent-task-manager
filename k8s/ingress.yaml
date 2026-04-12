@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agent-task-manager-ingress
+  namespace: agent-task-manager
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: public
+  tls:
+  - hosts:
+    - agenttaskmanager.martinrodl.me
+    secretName: agenttaskmanager-tls
+  rules:
+  - host: agenttaskmanager.martinrodl.me
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: agent-task-manager
+            port:
+              number: 3000

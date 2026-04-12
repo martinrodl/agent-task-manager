@@ -156,6 +156,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'create_project',
+      description: 'Create a new project. Use this to group related workflows and tasks together.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Name of the project' },
+          slug: { type: 'string', description: 'URL-friendly slug (e.g. "stock-screener")' },
+          description: { type: 'string', description: 'Description of the project' },
+          color: { type: 'string', description: 'Color hex code (default #6B7280)' },
+        },
+        required: ['name', 'slug'],
+      },
+    },
+    {
       name: 'create_workflow',
       description:
         'Create a complete workflow — name, states, and transitions — in a single call. ' +
@@ -297,6 +311,18 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
       case 'list_projects':
         data = await api('/projects')
+        break
+
+      case 'create_project':
+        data = await api('/projects', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: args.name,
+            slug: args.slug,
+            description: args.description ?? undefined,
+            color: args.color ?? undefined,
+          }),
+        })
         break
 
       case 'create_workflow':

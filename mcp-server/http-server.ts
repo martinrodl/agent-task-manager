@@ -191,6 +191,20 @@ function createMcpServer() {
         description: 'List all projects with their workflows.',
         inputSchema: { type: 'object', properties: {} },
       },
+      {
+        name: 'create_project',
+        description: 'Create a new project. Use this to group related workflows and tasks together.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Name of the project' },
+            slug: { type: 'string', description: 'URL-friendly slug (e.g. "stock-screener")' },
+            description: { type: 'string', description: 'Description of the project' },
+            color: { type: 'string', description: 'Color hex code' },
+          },
+          required: ['name', 'slug'],
+        },
+      },
     ],
   }))
 
@@ -258,6 +272,17 @@ function createMcpServer() {
         }
         case 'list_projects':
           data = await api('/projects')
+          break
+        case 'create_project':
+          data = await api('/projects', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: args.name,
+              slug: args.slug,
+              description: args.description ?? undefined,
+              color: args.color ?? undefined,
+            }),
+          })
           break
         default:
           return {

@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-task-manager
+  namespace: agent-task-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-task-manager
+  template:
+    metadata:
+      labels:
+        app: agent-task-manager
+    spec:
+      containers:
+      - name: agent-task-manager
+        image: localhost:32000/agent-task-manager:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://agenttask:secret@agent-task-db:5432/agenttask"
+        - name: SECRET_KEY
+          value: "change-me-in-production"
+        - name: ADMIN_PASSWORD
+          value: "admin"
+        - name: AGENT_API_KEY
+          value: "agent-key-change-me"
+        - name: ORCHESTRATOR_API_KEY
+          value: "orchestrator-key-change-me"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-task-manager
+  namespace: agent-task-manager
+spec:
+  selector:
+    app: agent-task-manager
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
