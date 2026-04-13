@@ -33,26 +33,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'model is required (or select an AI provider)' }, { status: 400 })
   }
 
-  const agent = await prisma.agent.create({
-    data: {
-      name:         body.name,
-      description:  body.description  ?? null,
-      apiToken:     body.apiToken     ?? null,
-      aiProviderId: body.aiProviderId  ?? null,
-      provider:     body.provider     ?? 'openai',
-      baseUrl:      body.baseUrl      ?? null,
-      apiKey:       body.apiKey       ?? null,
-      model:        body.model        ?? null,
-      systemPrompt: body.systemPrompt ?? null,
-      maxTokens:    body.maxTokens    ?? 2048,
-      temperature:  body.temperature  ?? 0.7,
-      extraConfig:   body.extraConfig   ?? {},
-      enabled:       body.enabled       ?? true,
-      tools:         body.tools         ?? [],
-      maxIterations: body.maxIterations ?? 20,
-    },
-    include: { aiProvider: { select: { id: true, name: true, model: true, provider: true } } },
-  })
-
-  return NextResponse.json(agent, { status: 201 })
+  try {
+    const agent = await prisma.agent.create({
+      data: {
+        name:         body.name,
+        description:  body.description  ?? null,
+        apiToken:     body.apiToken     ?? null,
+        aiProviderId: body.aiProviderId  ?? null,
+        provider:     body.provider     ?? 'openai',
+        baseUrl:      body.baseUrl      ?? null,
+        apiKey:       body.apiKey       ?? null,
+        model:        body.model        ?? null,
+        systemPrompt: body.systemPrompt ?? null,
+        maxTokens:    body.maxTokens    ?? 2048,
+        temperature:  body.temperature  ?? 0.7,
+        extraConfig:   body.extraConfig   ?? {},
+        enabled:       body.enabled       ?? true,
+        tools:         body.tools         ?? [],
+        maxIterations: body.maxIterations ?? 20,
+      },
+      include: { aiProvider: { select: { id: true, name: true, model: true, provider: true } } },
+    })
+    return NextResponse.json(agent, { status: 201 })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    // Unique constraint on name
+    if (msg.includes('Unique constraint') || msg.includes('unique constraint')) {
+      return NextResponse.json({ error: `Agent name '${body.name}' already exists` }, { status: 409 })
+    }
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 }

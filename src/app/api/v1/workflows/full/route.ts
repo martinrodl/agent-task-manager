@@ -56,9 +56,20 @@ export async function POST(req: NextRequest) {
 
   const workflow = await prisma.workflow.create({
     data: {
-      name:        body.name,
-      description: body.description ?? null,
+      name:          body.name,
+      description:   body.description   ?? null,
       projectId,
+      workspaceType: body.workspaceType  ?? null,
+      workspacePath: body.workspacePath  ?? null,
+      githubRepo:    body.githubRepo     ?? null,
+      githubBranch:  body.githubBranch   ?? null,
+      githubToken:   body.githubToken    ?? null,
+      webhookUrl:    body.webhookUrl     ?? null,
+      webhookSecret: body.webhookSecret  ?? null,
+      sandboxMode:   body.sandboxMode    ?? null,
+      dockerImage:   body.dockerImage    ?? null,
+      gitCloneUrl:   body.gitCloneUrl    ?? null,
+      setupScript:   body.setupScript    ?? null,
     },
   })
 

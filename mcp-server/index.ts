@@ -375,10 +375,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       {
         name: 'create_workflow',
         description:
-          'Create a complete workflow — name, states, and transitions — in a single call. ' +
+          'Create a complete workflow — name, states, transitions, and workspace/sandbox settings — in a single call. ' +
           'Use this when the user asks you to design or generate a new workflow. ' +
           'States are created in the order provided; the first state marked isInitial becomes the entry point. ' +
-          'Transitions wire states together; reference states by their name field (case-insensitive).',
+          'Transitions wire states together; reference states by their name field (case-insensitive). ' +
+          'Set workspacePath + workspaceType to tell agents where the project lives. ' +
+          'Set setupScript to spin up service containers before the agent starts.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -398,6 +400,53 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               type: 'string',
               description: 'Assign to a project by ID (alternative to projectSlug)',
             },
+            // ── Workspace ──────────────────────────────────────────────
+            workspaceType: {
+              type: 'string',
+              description: '"local" — agents access files at workspacePath on the server; "github" — agents clone githubRepo',
+            },
+            workspacePath: {
+              type: 'string',
+              description: 'Absolute server path agents operate in, e.g. "/srv/myproject" (local mode)',
+            },
+            githubRepo: {
+              type: 'string',
+              description: 'GitHub repo for agents, e.g. "owner/repo" (github mode)',
+            },
+            githubBranch: {
+              type: 'string',
+              description: 'Branch to use (github mode), default "main"',
+            },
+            // ── Sandbox ────────────────────────────────────────────────
+            sandboxMode: {
+              type: 'string',
+              description: '"docker" — agent runs in an isolated container per task; omit for direct server execution',
+            },
+            dockerImage: {
+              type: 'string',
+              description: 'Docker image for the agent container, e.g. "node:20-slim" (docker mode only)',
+            },
+            gitCloneUrl: {
+              type: 'string',
+              description: 'Git URL cloned into /workspace inside the agent container on start',
+            },
+            setupScript: {
+              type: 'string',
+              description:
+                'Bash script run on HOST before the agent starts. Use to spin up service containers. ' +
+                'Env vars available: TASK_ID, WORKSPACE_PATH, all agent env vars. ' +
+                'Name containers "${TASK_ID}-<service>" — they are auto-stopped/removed when the task ends. ' +
+                'Example: docker run -d --name "${TASK_ID}-db" postgres:16-alpine',
+            },
+            // ── Webhook ────────────────────────────────────────────────
+            webhookUrl: {
+              type: 'string',
+              description: 'URL called on every state transition (POST with task + transition JSON)',
+            },
+            webhookSecret: {
+              type: 'string',
+              description: 'HMAC secret sent as X-Webhook-Secret header',
+            },
             states: {
               type: 'array',
               description: 'Ordered list of states (columns on the kanban board)',
@@ -411,9 +460,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                   isTerminal:              { type: 'boolean', description: 'True for end states — no further transitions allowed' },
                   isBlocking:              { type: 'boolean', description: 'True for human-in-the-loop checkpoints — task waits for human action' },
                   sortOrder:               { type: 'number',  description: 'Column order on kanban (0-based, auto-assigned if omitted)' },
-                  agentId:                 { type: 'string',  description: 'Name of the agent auto-invoked when a task enters this state' },
+                  agentId:                 { type: 'string',  description: 'ID of the agent auto-invoked when a task enters this state. Use list_agents to find IDs.' },
                   completionTransitionName: { type: 'string', description: 'Transition the agent calls when done, e.g. "complete"' },
-                  stateInstructions:       { type: 'string',  description: 'Extra instructions injected into the agent prompt for this state' },
+                  stateInstructions:       { type: 'string',  description: 'Instructions injected into the agent prompt for this state. Be specific: what to do, what files to write, what transition to call.' },
                 },
                 required: ['name', 'label'],
               },
@@ -532,12 +581,22 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         data = await api('/workflows/full', {
           method: 'POST',
           body: JSON.stringify({
-            name:        args.name,
-            description: args.description ?? undefined,
-            projectSlug: args.projectSlug ?? undefined,
-            projectId:   args.projectId   ?? undefined,
-            states:      args.states      ?? [],
-            transitions: args.transitions ?? [],
+            name:          args.name,
+            description:   args.description   ?? undefined,
+            projectSlug:   args.projectSlug   ?? undefined,
+            projectId:     args.projectId     ?? undefined,
+            workspaceType: args.workspaceType  ?? undefined,
+            workspacePath: args.workspacePath  ?? undefined,
+            githubRepo:    args.githubRepo     ?? undefined,
+            githubBranch:  args.githubBranch   ?? undefined,
+            sandboxMode:   args.sandboxMode    ?? undefined,
+            dockerImage:   args.dockerImage    ?? undefined,
+            gitCloneUrl:   args.gitCloneUrl    ?? undefined,
+            setupScript:   args.setupScript    ?? undefined,
+            webhookUrl:    args.webhookUrl     ?? undefined,
+            webhookSecret: args.webhookSecret  ?? undefined,
+            states:        args.states         ?? [],
+            transitions:   args.transitions    ?? [],
           }),
         })
         break

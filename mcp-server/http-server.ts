@@ -254,6 +254,70 @@ function createMcpServer() {
           required: ['name', 'slug'],
         },
       },
+      {
+        name: 'create_workflow',
+        description:
+          'Create a complete workflow — name, states, transitions, and workspace/sandbox settings — in a single call. ' +
+          'Set workspacePath + workspaceType to tell agents where the project lives. ' +
+          'Set setupScript to spin up service containers before the agent starts. ' +
+          'Include stateInstructions and agentId on states to wire up the agentic loop.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name:          { type: 'string',  description: 'Workflow name' },
+            description:   { type: 'string',  description: 'Short description' },
+            projectSlug:   { type: 'string',  description: 'Project slug (use list_projects to find)' },
+            projectId:     { type: 'string',  description: 'Project ID (alternative to projectSlug)' },
+            workspaceType: { type: 'string',  description: '"local" or "github"' },
+            workspacePath: { type: 'string',  description: 'Absolute server path, e.g. "/srv/myproject"' },
+            githubRepo:    { type: 'string',  description: 'GitHub repo, e.g. "owner/repo"' },
+            githubBranch:  { type: 'string',  description: 'Branch name, default "main"' },
+            sandboxMode:   { type: 'string',  description: '"docker" for isolated container per task' },
+            dockerImage:   { type: 'string',  description: 'Docker image for agent container' },
+            gitCloneUrl:   { type: 'string',  description: 'Git URL cloned into /workspace on container start' },
+            setupScript:   { type: 'string',  description: 'Bash script run on HOST before agent starts. Containers named "${TASK_ID}-*" are auto-removed.' },
+            webhookUrl:    { type: 'string',  description: 'URL called on every state transition' },
+            webhookSecret: { type: 'string',  description: 'HMAC secret for webhook' },
+            states: {
+              type: 'array',
+              description: 'Ordered list of states',
+              items: {
+                type: 'object',
+                properties: {
+                  name:                    { type: 'string',  description: 'Machine name, e.g. IN_PROGRESS' },
+                  label:                   { type: 'string',  description: 'Human label' },
+                  color:                   { type: 'string',  description: 'Hex colour' },
+                  isInitial:               { type: 'boolean', description: 'Entry state' },
+                  isTerminal:              { type: 'boolean', description: 'End state' },
+                  isBlocking:              { type: 'boolean', description: 'HITL checkpoint' },
+                  sortOrder:               { type: 'number',  description: 'Column order (0-based)' },
+                  agentId:                 { type: 'string',  description: 'Agent ID auto-invoked on entry (use list_agents)' },
+                  completionTransitionName: { type: 'string', description: 'Transition agent calls when done' },
+                  stateInstructions:       { type: 'string',  description: 'Instructions injected into agent prompt for this state' },
+                },
+                required: ['name', 'label'],
+              },
+            },
+            transitions: {
+              type: 'array',
+              description: 'Edges between states',
+              items: {
+                type: 'object',
+                properties: {
+                  fromStateName:   { type: 'string',  description: 'Source state name' },
+                  toStateName:     { type: 'string',  description: 'Target state name' },
+                  name:            { type: 'string',  description: 'Machine name' },
+                  label:           { type: 'string',  description: 'Human label' },
+                  allowedRoles:    { type: 'array', items: { type: 'string' }, description: '"human", "agent", "orchestrator"' },
+                  requiresComment: { type: 'boolean', description: 'Comment required to trigger' },
+                },
+                required: ['fromStateName', 'toStateName', 'name', 'label'],
+              },
+            },
+          },
+          required: ['name', 'states'],
+        },
+      },
       // ── Admin tools (require AGENTTASK_ADMIN_PASSWORD) ─────────────────
       {
         name: 'list_agents',
@@ -486,6 +550,30 @@ function createMcpServer() {
               slug: args.slug,
               description: args.description ?? undefined,
               color: args.color ?? undefined,
+            }),
+          })
+          break
+
+        case 'create_workflow':
+          data = await api('/workflows/full', {
+            method: 'POST',
+            body: JSON.stringify({
+              name:          args.name,
+              description:   args.description   ?? undefined,
+              projectSlug:   args.projectSlug   ?? undefined,
+              projectId:     args.projectId     ?? undefined,
+              workspaceType: args.workspaceType  ?? undefined,
+              workspacePath: args.workspacePath  ?? undefined,
+              githubRepo:    args.githubRepo     ?? undefined,
+              githubBranch:  args.githubBranch   ?? undefined,
+              sandboxMode:   args.sandboxMode    ?? undefined,
+              dockerImage:   args.dockerImage    ?? undefined,
+              gitCloneUrl:   args.gitCloneUrl    ?? undefined,
+              setupScript:   args.setupScript    ?? undefined,
+              webhookUrl:    args.webhookUrl     ?? undefined,
+              webhookSecret: args.webhookSecret  ?? undefined,
+              states:        args.states         ?? [],
+              transitions:   args.transitions    ?? [],
             }),
           })
           break
