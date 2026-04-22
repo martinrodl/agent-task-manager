@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { priorityBorderColor, priorityLabel, timeAgo, initials } from '@/lib/utils'
+import { priorityLabel, timeAgo, initials } from '@/lib/utils'
+import { Settings, Bot, ShieldCheck, GripVertical } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,31 +95,31 @@ function ColumnSettings({
   return (
     <div
       ref={ref}
-      className="absolute top-full left-0 z-50 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-4 space-y-3"
+      className="absolute top-full left-0 z-50 mt-1 w-72 bg-surface-2 border border-border-strong rounded-xl shadow-xl p-4 space-y-3"
     >
-      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Column settings</p>
+      <p className="section-title">Column settings</p>
 
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          🤖 Auto-assign agent
+        <label className="block text-xs font-medium text-text-secondary mb-1">
+          Auto-assign agent
         </label>
         <input
           value={agentId}
           onChange={e => setAgentId(e.target.value)}
           placeholder="claude-agent-01"
-          className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="input-field font-mono text-xs"
         />
-        <p className="text-xs text-gray-400 mt-0.5">Tasks entering this state are auto-assigned to this agent.</p>
+        <p className="text-xs text-text-tertiary mt-0.5">Tasks entering this state are auto-assigned.</p>
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          ✅ Agent "done" transition
+        <label className="block text-xs font-medium text-text-secondary mb-1">
+          Agent &quot;done&quot; transition
         </label>
         <select
           value={doneTrans}
           onChange={e => setDoneTrans(e.target.value)}
-          className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="input-field text-xs"
         >
           <option value="">None</option>
           {outgoing.map(t => (
@@ -127,20 +128,20 @@ function ColumnSettings({
             </option>
           ))}
         </select>
-        <p className="text-xs text-gray-400 mt-0.5">Which transition the agent calls when finished.</p>
+        <p className="text-xs text-text-tertiary mt-0.5">Which transition the agent calls when finished.</p>
       </div>
 
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-xs text-err">{error}</p>}
 
       <div className="flex gap-2 pt-1">
         <button
           onClick={save}
           disabled={saving}
-          className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          className="px-3 py-1.5 bg-accent text-text-inverse text-xs font-display font-medium rounded-lg hover:shadow-glow-sm disabled:opacity-50 transition-all"
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
-        <button onClick={onClose} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+        <button onClick={onClose} className="px-3 py-1.5 text-xs text-text-tertiary hover:text-text-primary transition-colors">
           Cancel
         </button>
       </div>
@@ -159,7 +160,7 @@ function TaskCard({
   processing: boolean
   onDragStart: (taskId: string, fromStateId: string) => void
 }) {
-  const priColors = ['#9CA3AF', '#60A5FA', '#F59E0B', '#EF4444']
+  const priColors = ['var(--text-tertiary)', '#60A5FA', 'var(--warn)', 'var(--err)']
   const priColor  = priColors[task.priority] ?? priColors[0]
 
   return (
@@ -174,34 +175,32 @@ function TaskCard({
       <Link
         href={`/tasks/${task.id}`}
         draggable={false}
-        className={`block border rounded-lg hover:shadow-md transition-all group relative ${
+        className={`block rounded-lg transition-all duration-200 group relative border ${
           processing
-            ? 'bg-blue-50 border-blue-200 hover:border-blue-300'
-            : 'bg-white border-gray-200 hover:border-gray-300'
+            ? 'bg-accent/[0.06] border-accent/30 hover:border-accent/50 animate-pulse-glow'
+            : 'bg-surface-2 border-border hover:border-border-strong'
         }`}
-        style={{ borderLeft: `3px solid ${processing ? '#3B82F6' : priColor}` }}
+        style={{ borderLeft: `3px solid ${processing ? 'var(--accent)' : priColor}` }}
       >
         <div className="p-3">
           {/* Top meta */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-mono text-gray-400">{task.id.slice(-6).toUpperCase()}</span>
+            <span className="text-[10px] font-mono text-text-tertiary tracking-wider">{task.id.slice(-6).toUpperCase()}</span>
             <div className="flex items-center gap-1.5">
               {processing && (
-                <span className="flex items-center gap-1 text-xs text-blue-600 font-medium">
-                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="flex items-center gap-1 text-[10px] text-accent font-display font-medium uppercase tracking-wider">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                   Processing
                 </span>
               )}
               {task.state.isBlocking && !processing && (
-                <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-medium">
-                  REVIEW
-                </span>
+                <span className="badge-warn text-[10px] py-0">Review</span>
               )}
             </div>
           </div>
 
           {/* Title */}
-          <p className="text-sm font-medium text-gray-800 line-clamp-2 group-hover:text-blue-700 leading-snug">
+          <p className="text-sm font-medium text-text-primary line-clamp-2 group-hover:text-accent leading-snug transition-colors">
             {task.title}
           </p>
 
@@ -210,31 +209,31 @@ function TaskCard({
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5">
                 <div
-                  className="w-2 h-2 rounded-full shrink-0"
+                  className="w-1.5 h-1.5 rounded-full shrink-0"
                   title={priorityLabel(task.priority)}
                   style={{ backgroundColor: priColor }}
                 />
-                <span className="text-xs text-gray-400">{priorityLabel(task.priority)}</span>
+                <span className="text-[11px] text-text-tertiary">{priorityLabel(task.priority)}</span>
               </div>
               {(task._count?.subtasks ?? 0) > 0 && (
-                <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                <span className="text-[11px] text-text-tertiary bg-surface-3 px-1.5 py-0.5 rounded">
                   ↳ {task._count!.subtasks}
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">{timeAgo(task.updatedAt)}</span>
+              <span className="text-[11px] text-text-tertiary">{timeAgo(task.updatedAt)}</span>
               {task.assignedTo ? (
                 <div
-                  className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold shrink-0"
+                  className="w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-[10px] font-bold shrink-0 ring-1 ring-accent/30"
                   title={task.assignedTo}
                 >
                   {initials(task.assignedTo)}
                 </div>
               ) : (
-                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center" title="Unassigned">
-                  <span className="text-xs text-gray-400">?</span>
+                <div className="w-6 h-6 rounded-full bg-surface-3 flex items-center justify-center ring-1 ring-border" title="Unassigned">
+                  <span className="text-[10px] text-text-tertiary">?</span>
                 </div>
               )}
             </div>
@@ -275,35 +274,32 @@ function Column({
       <div className="mb-3 relative">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: state.color }} />
-            <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            <div className="w-2.5 h-2.5 rounded-sm ring-1 ring-surface-0" style={{ backgroundColor: state.color }} />
+            <span className="text-xs font-display font-semibold text-text-secondary uppercase tracking-wider">
               {state.label}
             </span>
-            <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-medium min-w-[20px] text-center">
+            <span className="text-[10px] bg-surface-3 text-text-tertiary px-1.5 py-0.5 rounded-full font-display font-medium min-w-[20px] text-center">
               {tasks.length}
             </span>
           </div>
           <button
             onClick={() => setSettingsOpen(!settingsOpen)}
-            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+            className="p-1 text-text-tertiary hover:text-text-secondary hover:bg-surface-2 rounded transition-colors"
             title="Configure column"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+            <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Agent badge */}
         {state.agentId && (
-          <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
-            <span className="text-blue-500">🤖</span>
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-text-tertiary">
+            <Bot className="w-3 h-3 text-accent" />
             <span className="font-mono truncate">{state.agentId}</span>
             {state.completionTransitionName && (
               <>
-                <span className="text-gray-300">·</span>
-                <span className="text-green-600">done: {state.completionTransitionName}</span>
+                <span className="text-border-strong">·</span>
+                <span className="text-ok">done: {state.completionTransitionName}</span>
               </>
             )}
           </div>
@@ -311,8 +307,8 @@ function Column({
 
         {/* HITL badge */}
         {state.isBlocking && (
-          <div className="mt-1 flex items-center gap-1 text-xs text-purple-600">
-            <span>🔒</span>
+          <div className="mt-1 flex items-center gap-1 text-[11px] text-warn">
+            <ShieldCheck className="w-3 h-3" />
             <span>Human review required</span>
           </div>
         )}
@@ -330,8 +326,8 @@ function Column({
 
       {/* Cards — drop zone */}
       <div
-        className={`flex-1 space-y-2 min-h-[120px] rounded-lg transition-colors ${
-          dragOver ? 'bg-blue-50 ring-2 ring-blue-300 ring-inset' : ''
+        className={`flex-1 space-y-2 min-h-[120px] rounded-lg transition-all duration-200 ${
+          dragOver ? 'bg-accent/[0.06] ring-1 ring-accent/30 ring-inset' : ''
         }`}
         onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -347,10 +343,10 @@ function Column({
         ))}
 
         {tasks.length === 0 && (
-          <div className={`h-20 border-2 border-dashed rounded-lg flex items-center justify-center transition-colors ${
-            dragOver ? 'border-blue-300' : 'border-gray-200'
+          <div className={`h-20 border border-dashed rounded-lg flex items-center justify-center transition-all duration-200 ${
+            dragOver ? 'border-accent/40 bg-accent/[0.04]' : 'border-border'
           }`}>
-            <span className="text-xs text-gray-300">{dragOver ? 'Drop here' : 'No tasks'}</span>
+            <span className="text-[11px] text-text-tertiary font-display">{dragOver ? 'Drop here' : 'No tasks'}</span>
           </div>
         )}
       </div>
@@ -404,7 +400,6 @@ export function KanbanBoard({
     const es = new EventSource(`/api/v1/stream/tasks?workflowId=${workflowId}`)
     es.addEventListener('task_updated', () => load())
     es.addEventListener('task_transitioned', (e) => {
-      // Remove from processing when agent finishes
       try {
         const d = JSON.parse((e as MessageEvent).data)
         if (d.taskId) setProcessing(prev => { const s = new Set(prev); s.delete(d.taskId); return s })
@@ -417,6 +412,10 @@ export function KanbanBoard({
         if (d.taskId) setProcessing(prev => new Set([...prev, d.taskId]))
       } catch { /* ignore */ }
     })
+    es.onerror = () => {
+      es.close()
+      setTimeout(() => load(), 5_000)
+    }
     return () => es.close()
   }, [load, workflowId])
 
@@ -433,7 +432,6 @@ export function KanbanBoard({
 
     if (fromStateId === toStateId) return
 
-    // Find a valid transition from fromState → toState
     const transition = workflow.transitions.find(
       t => t.fromStateId === fromStateId && t.toState.id === toStateId
     )
@@ -446,7 +444,6 @@ export function KanbanBoard({
       return
     }
 
-    // Optimistically move the card
     setByState(prev => {
       const next = { ...prev }
       const task = (prev[fromStateId] ?? []).find(t => t.id === taskId)
@@ -467,7 +464,6 @@ export function KanbanBoard({
       const data = await res.json().catch(() => ({}))
       setDropError(data.message ?? 'Transition failed')
       setTimeout(() => setDropError(''), 3500)
-      // Revert optimistic update
       load()
     }
   }
@@ -476,14 +472,13 @@ export function KanbanBoard({
     return (
       <div className="flex gap-4">
         {[1,2,3,4].map(i => (
-          <div key={i} className="w-[272px] h-64 bg-gray-100 rounded-lg animate-pulse" />
+          <div key={i} className="w-[272px] h-64 bg-surface-2 rounded-lg animate-pulse" />
         ))}
       </div>
     )
   }
-  if (!workflow) return <div className="text-red-500 py-8">Workflow not found.</div>
+  if (!workflow) return <div className="text-err py-8">Workflow not found.</div>
 
-  // Apply client-side filters
   const searchLower = filterSearch.toLowerCase()
   const filteredByState: Record<string, Task[]> = {}
   for (const [stateId, tasks] of Object.entries(tasksByState)) {
@@ -500,12 +495,12 @@ export function KanbanBoard({
   return (
     <div>
       {dropError && (
-        <div className="mb-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        <div className="mb-3 px-4 py-2 bg-err-dim border border-err/20 rounded-lg text-sm text-err">
           {dropError}
         </div>
       )}
       {isFiltered && (
-        <p className="mb-3 text-xs text-gray-400">{filteredTotal} task{filteredTotal !== 1 ? 's' : ''} match</p>
+        <p className="mb-3 text-xs text-text-tertiary font-display">{filteredTotal} task{filteredTotal !== 1 ? 's' : ''} match</p>
       )}
       <div
         className="flex gap-5 overflow-x-auto pb-6 pt-1 scrollbar-thin min-h-[400px]"

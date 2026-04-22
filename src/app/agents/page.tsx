@@ -232,16 +232,16 @@ export default function AgentsPage() {
   return (
     <div className="flex h-full">
       <Nav reviewCount={reviewCount} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto bg-surface-0">
         <div className="max-w-4xl mx-auto p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Agents</h1>
-              <p className="text-sm text-gray-500 mt-0.5">Configure LLM backends that auto-process tasks.</p>
+              <h1 className="text-xl font-bold text-text-primary">Agents</h1>
+              <p className="text-sm text-text-secondary mt-0.5">Configure LLM backends that auto-process tasks.</p>
             </div>
             <button
               onClick={openNew}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-accent text-text-inverse text-sm font-medium rounded-lg hover:shadow-glow transition-colors"
             >
               + New agent
             </button>
@@ -249,9 +249,9 @@ export default function AgentsPage() {
 
           {/* Form */}
           {editing && (
-            <div id="agent-form" className="bg-white border-2 border-blue-200 rounded-xl p-6 mb-6 space-y-4">
+            <div id="agent-form" className="bg-surface-1 border-2 border-accent/20 rounded-xl p-6 mb-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-gray-900">{editing === 'new' ? 'New agent' : 'Edit agent'}</h2>
+                <h2 className="font-semibold text-text-primary">{editing === 'new' ? 'New agent' : 'Edit agent'}</h2>
                 <AiAssistButton
                   type="agent"
                   defaultProviderId={form.aiProviderId || undefined}
@@ -270,38 +270,38 @@ export default function AgentsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Name <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">Name <span className="text-err">*</span></label>
                   <input
                     value={form.name}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="my-code-agent"
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"
                   />
-                  <p className="text-xs text-gray-400 mt-0.5">Must match the Agent ID set on workflow states.</p>
+                  <p className="text-xs text-text-tertiary mt-0.5">Must match the Agent ID set on workflow states.</p>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">Description</label>
                   <input
                     value={form.description}
                     onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                     placeholder="Handles code review tasks"
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
               </div>
 
               {/* AI Model selection */}
-              <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-                <label className="block text-xs font-medium text-gray-600">AI Model <span className="text-red-500">*</span></label>
+              <div className="bg-surface-0 rounded-lg p-3 space-y-2">
+                <label className="block text-xs font-medium text-text-secondary">AI Model <span className="text-err">*</span></label>
                 {aiProviders.length === 0 ? (
-                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <p className="text-sm text-warn bg-warn-dim border border-warn/20 rounded-lg px-3 py-2">
                     No AI providers configured. <a href="/settings" className="underline font-medium">Go to Settings →</a>
                   </p>
                 ) : (
                   <select
                     value={form.aiProviderId}
                     onChange={e => setForm(f => ({ ...f, aiProviderId: e.target.value }))}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent bg-surface-1"
                   >
                     <option value="">— Custom (manual) —</option>
                     {aiProviders.map(p => (
@@ -310,9 +310,9 @@ export default function AgentsPage() {
                   </select>
                 )}
                 {form.aiProviderId ? (
-                  <p className="text-xs text-gray-400">API key and endpoint are managed in <a href="/settings" className="text-blue-600 hover:underline">Settings → AI Providers</a>.</p>
+                  <p className="text-xs text-text-tertiary">API key and endpoint are managed in <a href="/settings" className="text-accent hover:underline">Settings → AI Providers</a>.</p>
                 ) : (
-                  <button type="button" onClick={() => setShowManual(v => !v)} className="text-xs text-blue-600 hover:underline">
+                  <button type="button" onClick={() => setShowManual(v => !v)} className="text-xs text-accent hover:underline">
                     {showManual ? '▲ Hide manual fields' : '▼ Show manual fields'}
                   </button>
                 )}
@@ -320,60 +320,60 @@ export default function AgentsPage() {
 
               {/* Manual fields — shown when no aiProviderId selected */}
               {!form.aiProviderId && showManual && (
-                <div className="space-y-4 border border-dashed border-gray-300 rounded-lg p-4">
+                <div className="space-y-4 border border-dashed border-border rounded-lg p-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Provider</label>
                       <select
                         value={form.provider}
                         onChange={e => {
                           const meta = PROVIDERS.find(p => p.value === e.target.value)
                           setForm(f => ({ ...f, provider: e.target.value, baseUrl: meta?.urlPlaceholder ?? f.baseUrl }))
                         }}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                       >
                         {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Base URL</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Base URL</label>
                       <input
                         value={form.baseUrl}
                         onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value }))}
                         placeholder={providerMeta(form.provider)?.urlPlaceholder ?? 'https://...'}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Model <span className="text-red-500">*</span></label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Model <span className="text-err">*</span></label>
                       <input
                         value={form.model}
                         onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
                         placeholder="gpt-4o-mini"
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">API Key</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">API Key</label>
                       <input
                         type="password"
                         value={form.apiKey}
                         onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))}
                         placeholder="sk-..."
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                     </div>
                   </div>
                   {form.provider === 'azure' && (
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">API Version</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">API Version</label>
                       <input
                         value={(form.extraConfig.apiVersion as string) ?? ''}
                         onChange={e => setForm(f => ({ ...f, extraConfig: { ...f.extraConfig, apiVersion: e.target.value } }))}
                         placeholder="2024-02-01"
-                        className="w-48 px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-48 px-3 py-1.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                     </div>
                   )}
@@ -383,22 +383,22 @@ export default function AgentsPage() {
               {/* Params */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Max tokens</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">Max tokens</label>
                   <input
                     type="number"
                     value={form.maxTokens}
                     onChange={e => setForm(f => ({ ...f, maxTokens: Number(e.target.value) }))}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Temperature</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">Temperature</label>
                   <input
                     type="number"
                     step="0.1" min="0" max="2"
                     value={form.temperature}
                     onChange={e => setForm(f => ({ ...f, temperature: Number(e.target.value) }))}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
                 <div className="flex items-end pb-1.5">
@@ -415,58 +415,58 @@ export default function AgentsPage() {
 
               {/* Agent API token */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  API token <span className="text-gray-400 font-normal">(optional — agent uses this Bearer token to authenticate with AgentTask)</span>
+                <label className="block text-xs font-medium text-text-secondary mb-1">
+                  API token <span className="text-text-tertiary font-normal">(optional — agent uses this Bearer token to authenticate with AgentTask)</span>
                 </label>
                 <input
                   type="password"
                   value={form.apiToken ?? ''}
                   onChange={e => setForm(f => ({ ...f, apiToken: e.target.value }))}
                   placeholder={editing && editing !== 'new' ? 'Leave blank to keep existing token' : 'e.g. agt_abc123… (generate a random string)'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"
                 />
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-text-tertiary mt-0.5">
                   When set, this agent authenticates by sending{' '}
-                  <code className="bg-gray-100 px-1 rounded">Authorization: Bearer &lt;token&gt;</code>.
-                  Falls back to the global <code className="bg-gray-100 px-1 rounded">AGENT_API_KEY</code> env var if blank.
+                  <code className="bg-surface-2 px-1 rounded">Authorization: Bearer &lt;token&gt;</code>.
+                  Falls back to the global <code className="bg-surface-2 px-1 rounded">AGENT_API_KEY</code> env var if blank.
                 </p>
               </div>
 
               {/* System prompt */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">System prompt</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">System prompt</label>
                 <textarea
                   value={form.systemPrompt}
                   onChange={e => setForm(f => ({ ...f, systemPrompt: e.target.value }))}
                   rows={4}
                   placeholder="You are an expert software engineer. Complete tasks methodically..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent"
                 />
               </div>
 
               {/* Skills autocomplete multi-select */}
               <div ref={skillRef}>
-                <label className="block text-xs font-medium text-gray-600 mb-1">🔧 Skills</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">🔧 Skills</label>
                 {allSkills.length === 0 ? (
-                  <p className="text-xs text-gray-400">No skills defined yet. <a href="/skills" className="text-blue-600 hover:underline">Create skills →</a></p>
+                  <p className="text-xs text-text-tertiary">No skills defined yet. <a href="/skills" className="text-accent hover:underline">Create skills →</a></p>
                 ) : (
                   <div className="relative">
                     {/* Selected tags + input */}
                     <div
-                      className="min-h-[36px] flex flex-wrap gap-1.5 px-2 py-1.5 border border-gray-300 rounded-lg bg-white cursor-text focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500"
+                      className="min-h-[36px] flex flex-wrap gap-1.5 px-2 py-1.5 border border-border rounded-lg bg-surface-1 cursor-text focus-within:ring-2 focus-within:ring-accent focus-within:border-accent"
                       onClick={() => { setSkillDropOpen(true); (skillRef.current?.querySelector('input') as HTMLInputElement | null)?.focus() }}
                     >
                       {form.skillIds.map(id => {
                         const s = allSkills.find(x => x.id === id)
                         if (!s) return null
                         return (
-                          <span key={id} className="flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-md">
+                          <span key={id} className="flex items-center gap-1 bg-accent/10 text-accent text-xs font-medium px-2 py-0.5 rounded-md">
                             <span>{s.icon}</span>
                             <span>{s.name}</span>
                             <button
                               type="button"
                               onClick={e => { e.stopPropagation(); setForm(f => ({ ...f, skillIds: f.skillIds.filter(i => i !== id) })) }}
-                              className="ml-0.5 text-blue-500 hover:text-blue-800 leading-none"
+                              className="ml-0.5 text-accent hover:text-accent leading-none"
                             >×</button>
                           </span>
                         )
@@ -478,7 +478,7 @@ export default function AgentsPage() {
                         onFocus={() => setSkillDropOpen(true)}
                         onBlur={() => setTimeout(() => setSkillDropOpen(false), 150)}
                         placeholder={form.skillIds.length === 0 ? 'Search and add skills…' : ''}
-                        className="flex-1 min-w-[120px] text-sm outline-none bg-transparent placeholder-gray-400"
+                        className="flex-1 min-w-[120px] text-sm outline-none bg-transparent placeholder-text-tertiary"
                       />
                     </div>
 
@@ -491,7 +491,7 @@ export default function AgentsPage() {
                       )
                       if (options.length === 0) return null
                       return (
-                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-surface-1 border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
                           {options.map(s => (
                             <button
                               key={s.id}
@@ -501,12 +501,12 @@ export default function AgentsPage() {
                                 setForm(f => ({ ...f, skillIds: [...f.skillIds, s.id] }))
                                 setSkillSearch('')
                               }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-blue-50 transition-colors"
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-accent/[0.06] transition-colors"
                             >
                               <span className="text-base">{s.icon}</span>
                               <div>
-                                <span className="font-medium text-gray-900">{s.name}</span>
-                                {s.description && <span className="ml-2 text-gray-400 text-xs">{s.description}</span>}
+                                <span className="font-medium text-text-primary">{s.name}</span>
+                                {s.description && <span className="ml-2 text-text-tertiary text-xs">{s.description}</span>}
                               </div>
                             </button>
                           ))}
@@ -518,18 +518,18 @@ export default function AgentsPage() {
               </div>
 
               {/* Tool providers (agentic loop) */}
-              <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              <div className="bg-surface-0 rounded-lg p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-medium text-gray-600">Tool providers (agentic loop)</label>
+                  <label className="block text-xs font-medium text-text-secondary">Tool providers (agentic loop)</label>
                   {form.tools.length > 0 && (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-gray-500">Max iterations:</span>
+                      <span className="text-xs text-text-secondary">Max iterations:</span>
                       <input
                         type="number"
                         min={1} max={50}
                         value={form.maxIterations}
                         onChange={e => setForm(f => ({ ...f, maxIterations: Number(e.target.value) }))}
-                        className="w-16 px-2 py-0.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-16 px-2 py-0.5 border border-border rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                     </div>
                   )}
@@ -549,33 +549,33 @@ export default function AgentsPage() {
                         className="mt-0.5 shrink-0"
                       />
                       <div>
-                        <span className="text-sm font-medium text-gray-800 group-hover:text-blue-700">{tp.label}</span>
-                        <p className="text-xs text-gray-400">{tp.desc}</p>
+                        <span className="text-sm font-medium text-text-primary group-hover:text-accent">{tp.label}</span>
+                        <p className="text-xs text-text-tertiary">{tp.desc}</p>
                       </div>
                     </label>
                   ))}
                 </div>
                 {form.tools.length === 0 && (
-                  <p className="text-xs text-gray-400">No tools selected — agent runs in single-shot mode.</p>
+                  <p className="text-xs text-text-tertiary">No tools selected — agent runs in single-shot mode.</p>
                 )}
                 {form.tools.length > 0 && (
-                  <p className="text-xs text-amber-700">Agentic loop enabled — agent will call tools autonomously until it produces a final JSON response.</p>
+                  <p className="text-xs text-warn">Agentic loop enabled — agent will call tools autonomously until it produces a final JSON response.</p>
                 )}
               </div>
 
-              {error && <p className="text-sm text-red-600">{error}</p>}
+              {error && <p className="text-sm text-err">{error}</p>}
 
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={save}
                   disabled={saving}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-accent text-text-inverse text-sm font-medium rounded-lg hover:shadow-glow disabled:opacity-50"
                 >
                   {saving ? 'Saving…' : 'Save agent'}
                 </button>
                 <button
                   onClick={() => setEditing(null)}
-                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+                  className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary"
                 >
                   Cancel
                 </button>
@@ -585,10 +585,10 @@ export default function AgentsPage() {
 
           {/* Agent list */}
           {agents.length === 0 && !editing ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+            <div className="bg-surface-1 rounded-xl border border-border p-12 text-center">
               <p className="text-2xl mb-2">🤖</p>
-              <p className="text-gray-500 mb-1">No agents configured yet.</p>
-              <p className="text-sm text-gray-400">Create an agent to enable automatic task processing.</p>
+              <p className="text-text-secondary mb-1">No agents configured yet.</p>
+              <p className="text-sm text-text-tertiary">Create an agent to enable automatic task processing.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -596,20 +596,20 @@ export default function AgentsPage() {
                 const meta = providerMeta(a.provider)
                 const tr = testResult[a.id]
                 return (
-                  <div key={a.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                  <div key={a.id} className="bg-surface-1 rounded-xl border border-border p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${a.enabled ? 'bg-green-400' : 'bg-gray-300'}`} />
+                        <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${a.enabled ? 'bg-ok' : 'bg-surface-2'}`} />
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 font-mono">{a.name}</span>
-                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{meta?.label ?? a.provider}</span>
-                            {!a.enabled && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">disabled</span>}
+                            <span className="font-semibold text-text-primary font-mono">{a.name}</span>
+                            <span className="text-xs bg-surface-2 text-text-secondary px-2 py-0.5 rounded-full">{meta?.label ?? a.provider}</span>
+                            {!a.enabled && <span className="text-xs bg-warn-dim text-warn px-2 py-0.5 rounded-full">disabled</span>}
                           </div>
-                          {a.description && <p className="text-sm text-gray-500 mt-0.5">{a.description}</p>}
-                          <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                          {a.description && <p className="text-sm text-text-secondary mt-0.5">{a.description}</p>}
+                          <div className="flex items-center gap-2 mt-1 text-xs text-text-tertiary">
                             {a.aiProvider ? (
-                              <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-medium">
+                              <span className="bg-warn-dim text-warn border border-warn/20 px-2 py-0.5 rounded-full font-medium">
                                 {a.aiProvider.name} · {a.aiProvider.model}
                               </span>
                             ) : (
@@ -626,7 +626,7 @@ export default function AgentsPage() {
                             {a.tools?.length > 0 && (
                               <>
                                 <span>·</span>
-                                <span className="text-purple-600 font-medium">loop [{a.tools.join('+')}]</span>
+                                <span className="text-warn font-medium">loop [{a.tools.join('+')}]</span>
                               </>
                             )}
                           </div>
@@ -637,26 +637,26 @@ export default function AgentsPage() {
                         <button
                           onClick={() => expandAgent(a.id)}
                           className={`px-3 py-1.5 text-xs border rounded-lg transition-colors
-                            ${expanded === a.id ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                            ${expanded === a.id ? 'bg-accent/[0.06] border-accent/30 text-accent' : 'border-border text-text-secondary hover:bg-surface-2'}`}
                         >
                           Skills & Keys {expanded === a.id ? '▲' : '▼'}
                         </button>
                         <button
                           onClick={() => testAgent(a.id)}
                           disabled={testing === a.id}
-                          className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                          className="px-3 py-1.5 text-xs border border-border text-text-secondary rounded-lg hover:bg-surface-2 disabled:opacity-50"
                         >
                           {testing === a.id ? 'Testing…' : 'Test'}
                         </button>
                         <button
                           onClick={() => openEdit(a)}
-                          className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
+                          className="px-3 py-1.5 text-xs border border-border text-text-secondary rounded-lg hover:bg-surface-2"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => deleteAgent(a.id)}
-                          className="px-3 py-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                          className="px-3 py-1.5 text-xs text-err hover:text-err hover:bg-err-dim rounded-lg"
                         >
                           Delete
                         </button>
@@ -664,19 +664,19 @@ export default function AgentsPage() {
                     </div>
 
                     {tr && (
-                      <div className={`mt-2 text-xs px-3 py-2 rounded-lg font-mono ${tr.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <div className={`mt-2 text-xs px-3 py-2 rounded-lg font-mono ${tr.ok ? 'bg-ok/[0.06] text-ok' : 'bg-err-dim text-err'}`}>
                         {tr.msg}
                       </div>
                     )}
 
                     {/* Skills & EnvVars assignment panel */}
                     {expanded === a.id && (
-                      <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+                      <div className="mt-4 pt-4 border-t border-border space-y-4">
                         {/* Skills */}
                         <div>
-                          <p className="text-xs font-semibold text-gray-600 mb-2">🔧 Skills</p>
+                          <p className="text-xs font-semibold text-text-secondary mb-2">🔧 Skills</p>
                           {allSkills.length === 0 ? (
-                            <p className="text-xs text-gray-400">No skills defined yet. <a href="/skills" className="text-blue-600 hover:underline">Create skills →</a></p>
+                            <p className="text-xs text-text-tertiary">No skills defined yet. <a href="/skills" className="text-accent hover:underline">Create skills →</a></p>
                           ) : (
                             <div className="flex flex-wrap gap-2">
                               {allSkills.map(s => {
@@ -686,7 +686,7 @@ export default function AgentsPage() {
                                     key={s.id}
                                     onClick={() => toggleSkill(a.id, s.id)}
                                     className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border transition-colors
-                                      ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}`}
+                                      ${active ? 'bg-accent text-text-inverse border-accent' : 'bg-surface-1 text-text-secondary border-border hover:border-accent'}`}
                                   >
                                     <span>{s.icon}</span>
                                     <span>{s.name}</span>
@@ -699,9 +699,9 @@ export default function AgentsPage() {
 
                         {/* Env vars */}
                         <div>
-                          <p className="text-xs font-semibold text-gray-600 mb-2">🔑 API Keys & Env Vars</p>
+                          <p className="text-xs font-semibold text-text-secondary mb-2">🔑 API Keys & Env Vars</p>
                           {allEnvVars.length === 0 ? (
-                            <p className="text-xs text-gray-400">No keys defined yet. <a href="/skills" className="text-blue-600 hover:underline">Add keys →</a></p>
+                            <p className="text-xs text-text-tertiary">No keys defined yet. <a href="/skills" className="text-accent hover:underline">Add keys →</a></p>
                           ) : (
                             <div className="flex flex-wrap gap-2">
                               {allEnvVars.map(v => {
@@ -711,7 +711,7 @@ export default function AgentsPage() {
                                     key={v.id}
                                     onClick={() => toggleEnvVar(a.id, v.id)}
                                     className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border font-mono transition-colors
-                                      ${active ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'}`}
+                                      ${active ? 'bg-ok text-text-inverse border-ok' : 'bg-surface-1 text-text-secondary border-border hover:border-ok'}`}
                                   >
                                     🔑 {v.key}
                                   </button>
@@ -724,7 +724,7 @@ export default function AgentsPage() {
                         <button
                           onClick={() => saveAssignments(a.id)}
                           disabled={assigning}
-                          className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                          className="px-3 py-1.5 bg-accent text-text-inverse text-xs font-medium rounded-lg hover:shadow-glow disabled:opacity-50"
                         >
                           {assigning ? 'Saving…' : 'Save assignments'}
                         </button>
@@ -737,13 +737,13 @@ export default function AgentsPage() {
           )}
 
           {/* How it works */}
-          <div className="mt-8 bg-gray-50 rounded-xl border border-gray-200 p-5 text-sm text-gray-600 space-y-2">
-            <p className="font-semibold text-gray-900">How auto-invocation works</p>
+          <div className="mt-8 bg-surface-0 rounded-xl border border-border p-5 text-sm text-text-secondary space-y-2">
+            <p className="font-semibold text-text-primary">How auto-invocation works</p>
             <ol className="list-decimal list-inside space-y-1">
               <li>Set the <strong>Agent ID</strong> on a workflow state (gear icon on kanban column) to match an agent's <strong>Name</strong>.</li>
               <li>When a task transitions into that state, the system automatically calls the configured LLM.</li>
               <li>The LLM receives the task title, description, context, and available transitions.</li>
-              <li>It replies with JSON: <code className="bg-gray-100 px-1 rounded">{"{ transitionName, comment, result }"}</code></li>
+              <li>It replies with JSON: <code className="bg-surface-2 px-1 rounded">{"{ transitionName, comment, result }"}</code></li>
               <li>The system executes the transition and stores the result.</li>
             </ol>
           </div>

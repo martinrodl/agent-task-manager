@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { formatDate, priorityLabel, priorityColor } from '@/lib/utils'
+import { ArrowLeft, ArrowRight, Bot, ExternalLink, GitBranch, Cpu } from 'lucide-react'
 
 interface State  { id: string; name: string; label: string; color: string; isBlocking: boolean; isTerminal: boolean; agentId?: string | null }
 interface Transition { name: string; label: string; toState: string; toStateLabel: string; requiresComment: boolean; href: string }
@@ -43,8 +44,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     loadTask()
-
-    // SSE — live refresh when task transitions or agent starts
     const es = new EventSource(`/api/v1/stream/tasks`)
     es.addEventListener('task_processing', (e) => {
       try {
@@ -64,6 +63,10 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         if (d.taskId === id) { setProcessing(false); loadTask() }
       } catch { /* ignore */ }
     })
+    es.onerror = () => {
+      es.close()
+      setTimeout(() => loadTask(), 5_000)
+    }
     return () => es.close()
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -121,12 +124,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     setTrans(null)
   }
 
-  if (loading) return <div className="p-8 text-gray-500">Loading…</div>
-  if (!task)   return <div className="p-8 text-red-500">Task not found.</div>
+  if (loading) return <div className="p-8 text-text-secondary">Loading…</div>
+  if (!task)   return <div className="p-8 text-err">Task not found.</div>
 
   const transitions = task._links?.availableTransitions ?? []
 
-  // Detect URLs in task.result for preview banner
   const URL_KEYS = ['previewUrl', 'preview_url', 'deployUrl', 'deploy_url', 'url',
                     'sandboxUrl', 'sandbox_url', 'appUrl', 'app_url', 'prUrl', 'pr_url']
   const previewLinks: { label: string; url: string }[] = []
@@ -139,7 +141,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         }
       }
     }
-    // Also pick up nested { previewUrl } one level deep
     for (const v of Object.values(task.result)) {
       if (v && typeof v === 'object' && !Array.isArray(v)) {
         for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) {
@@ -153,23 +154,26 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const branch = typeof task.result?.branch === 'string' ? task.result.branch as string : null
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-0">
       <div className="max-w-4xl mx-auto p-8">
         {/* Header */}
         <div className="mb-6">
-          <Link href="/tasks" className="text-sm text-gray-500 hover:text-gray-700">← Tasks</Link>
+          <Link href="/tasks" className="inline-flex items-center gap-1 text-sm text-text-tertiary hover:text-text-secondary transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Tasks
+          </Link>
           <div className="flex items-start justify-between mt-2">
-            <h1 className="text-2xl font-bold text-gray-900 flex-1 mr-4">{task.title}</h1>
-            <span className="text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded shrink-0">{task.id}</span>
+            <h1 className="font-display text-2xl font-bold text-text-primary flex-1 mr-4 tracking-tight">{task.title}</h1>
+            <span className="text-[10px] font-mono bg-surface-2 text-text-tertiary px-2 py-1 rounded-lg border border-border shrink-0">{task.id}</span>
           </div>
         </div>
 
         {/* Preview / deploy URL banner */}
         {previewLinks.length > 0 && (
-          <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+          <div className="mb-4 bg-ok/[0.08] border border-ok/20 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-emerald-600">🚀</span>
-              <p className="text-sm font-semibold text-emerald-800">Deployed — ready for review</p>
+              <ExternalLink className="w-4 h-4 text-ok" />
+              <p className="text-sm font-display font-semibold text-ok uppercase tracking-wider">Deployed — ready for review</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {previewLinks.map(({ label, url }) => (
@@ -178,15 +182,15 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ok text-text-inverse text-sm font-display font-medium rounded-lg hover:shadow-md transition-all active:scale-[0.98]"
                 >
-                  <span>↗</span>
+                  <ExternalLink className="w-3 h-3" />
                   <span className="capitalize">{label}</span>
                 </a>
               ))}
               {branch && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 text-sm rounded-lg font-mono border border-emerald-200">
-                  🌿 {branch}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ok/10 text-ok text-sm rounded-lg font-mono border border-ok/20">
+                  <GitBranch className="w-3 h-3" /> {branch}
                 </span>
               )}
             </div>
@@ -197,25 +201,23 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
           {/* Main content */}
           <div className="col-span-2 space-y-4">
             {task.description && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Description</h3>
-                <p className="text-gray-800 whitespace-pre-wrap">{task.description}</p>
+              <div className="card p-5">
+                <h3 className="section-title mb-2">Description</h3>
+                <p className="text-text-primary whitespace-pre-wrap text-sm">{task.description}</p>
               </div>
             )}
 
-            {/* Context */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-medium text-gray-500 mb-2">Context <span className="text-xs text-gray-400">(agent metadata)</span></h3>
-              <pre className="text-sm font-mono bg-gray-50 p-3 rounded-lg overflow-auto text-gray-700">
+            <div className="card p-5">
+              <h3 className="section-title mb-2">Context <span className="text-text-tertiary font-normal normal-case tracking-normal">(agent metadata)</span></h3>
+              <pre className="text-xs font-mono bg-surface-2 text-text-secondary p-3 rounded-lg overflow-auto border border-border">
                 {JSON.stringify(task.context, null, 2)}
               </pre>
             </div>
 
-            {/* Result */}
             {task.result && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Result <span className="text-xs text-gray-400">(agent output)</span></h3>
-                <pre className="text-sm font-mono bg-green-50 p-3 rounded-lg overflow-auto text-gray-700">
+              <div className="card p-5">
+                <h3 className="section-title mb-2">Result <span className="text-text-tertiary font-normal normal-case tracking-normal">(agent output)</span></h3>
+                <pre className="text-xs font-mono bg-ok/[0.06] text-text-secondary p-3 rounded-lg overflow-auto border border-ok/10">
                   {JSON.stringify(
                     { ...task.result, screenshots: task.result.screenshots ? `[${(task.result.screenshots as string[]).length} screenshot(s)]` : undefined },
                     null, 2
@@ -224,67 +226,60 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
 
-            {/* Screenshots gallery */}
             {Array.isArray(task.result?.screenshots) && (task.result.screenshots as string[]).length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h3 className="text-sm font-medium text-gray-500 mb-3">
-                  Screenshots <span className="text-xs text-gray-400">({(task.result.screenshots as string[]).length})</span>
+              <div className="card p-5">
+                <h3 className="section-title mb-3">
+                  Screenshots <span className="text-text-tertiary">({(task.result.screenshots as string[]).length})</span>
                 </h3>
                 <div className="space-y-3">
                   {(task.result.screenshots as string[]).map((b64, i) => (
-                    <div key={i} className="border border-gray-100 rounded-lg overflow-hidden">
-                      <div className="bg-gray-50 px-3 py-1 text-xs text-gray-400 border-b border-gray-100">
+                    <div key={i} className="border border-border rounded-lg overflow-hidden">
+                      <div className="bg-surface-2 px-3 py-1 text-[10px] text-text-tertiary border-b border-border font-display uppercase tracking-wider">
                         Screenshot {i + 1}
                       </div>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`data:image/png;base64,${b64}`}
-                        alt={`Screenshot ${i + 1}`}
-                        className="w-full"
-                      />
+                      <img src={`data:image/png;base64,${b64}`} alt={`Screenshot ${i + 1}`} className="w-full" />
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Subtasks */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-500">
-                  Subtasks {task.subtasks.length > 0 && <span className="text-gray-400">({task.subtasks.length})</span>}
+                <h3 className="section-title">
+                  Subtasks {task.subtasks.length > 0 && <span className="text-text-tertiary">({task.subtasks.length})</span>}
                 </h3>
                 <Link
                   href={`/tasks/new?workflowId=${task.workflow.id}&parentId=${task.id}`}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-xs text-accent hover:underline font-display font-medium"
                 >
                   + Add subtask
                 </Link>
               </div>
               {task.subtasks.length === 0 ? (
-                <p className="text-xs text-gray-400">No subtasks yet.</p>
+                <p className="text-xs text-text-tertiary">No subtasks yet.</p>
               ) : (
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {task.subtasks.map(s => (
                     <Link
                       key={s.id}
                       href={`/tasks/${s.id}`}
-                      className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 transition-colors group"
+                      className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-surface-2 transition-colors group"
                     >
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.state.color }} />
-                      <span className="text-sm text-gray-800 group-hover:text-blue-700 flex-1 truncate">{s.title}</span>
-                      <span className="text-xs text-gray-400 shrink-0">{s.state.label}</span>
-                      {s.state.isTerminal && <span className="text-xs text-gray-300">✓</span>}
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.state.color }} />
+                      <span className="text-sm text-text-primary group-hover:text-accent flex-1 truncate transition-colors">{s.title}</span>
+                      <span className="text-xs text-text-tertiary shrink-0">{s.state.label}</span>
+                      {s.state.isTerminal && <span className="text-xs text-ok">✓</span>}
                     </Link>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Transitions */}
             {transitions.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h3 className="text-sm font-medium text-gray-500 mb-3">Actions (human)</h3>
+              <div className="card p-5">
+                <h3 className="section-title mb-3">Actions (human)</h3>
                 <div className="space-y-3">
                   {transitions.map(t => (
                     <div key={t.name}>
@@ -296,20 +291,20 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                               onChange={e => setComment(e.target.value)}
                               placeholder="Comment (required)…"
                               rows={2}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="input-field text-sm resize-none"
                             />
                           )}
                           <div className="flex gap-2">
                             <button
                               onClick={() => doTransition(t)}
                               disabled={!!transitioning}
-                              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-accent text-text-inverse text-sm font-display font-medium rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
                             >
                               {transitioning === t.name ? 'Processing…' : `Confirm: ${t.label}`}
                             </button>
                             <button
                               onClick={() => { setActiveTransition(null); setComment(''); setError('') }}
-                              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
+                              className="px-3 py-1.5 text-sm text-text-tertiary hover:text-text-secondary transition-colors"
                             >
                               Cancel
                             </button>
@@ -318,47 +313,50 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                       ) : (
                         <button
                           onClick={() => { setActiveTransition(t); setError('') }}
-                          className="px-3 py-1.5 border border-gray-300 text-sm text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                          className="px-3 py-1.5 border border-border text-sm text-text-secondary rounded-lg hover:bg-surface-2 hover:border-border-strong transition-all"
                         >
-                          {t.label} → <span className="text-gray-500">{t.toStateLabel}</span>
+                          {t.label} → <span className="text-text-tertiary">{t.toStateLabel}</span>
                         </button>
                       )}
                     </div>
                   ))}
                 </div>
-                {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+                {error && <p className="text-sm text-err mt-2">{error}</p>}
               </div>
             )}
 
-            {/* Event history + comments */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-medium text-gray-500 mb-3">Activity</h3>
+            {/* Activity */}
+            <div className="card p-5">
+              <h3 className="section-title mb-3">Activity</h3>
               {task.events.length === 0 ? (
-                <p className="text-sm text-gray-400">No events yet.</p>
+                <p className="text-sm text-text-tertiary">No events yet.</p>
               ) : (
-                <div className="space-y-3">
-                  {task.events.map(e => {
+                <div className="space-y-0">
+                  {task.events.map((e, i) => {
                     const isComment = !e.fromState && !e.toState && !!e.comment
                     return (
-                      <div key={e.id} className="flex gap-3">
-                        <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isComment ? 'bg-gray-300' : 'bg-blue-300'}`} />
-                        <div className="flex-1">
-                          <p className="text-sm text-gray-800">
+                      <div key={e.id} className="relative flex gap-3 py-2.5">
+                        {i < task.events.length - 1 && (
+                          <div className="absolute left-[5px] top-8 bottom-0 w-px bg-border" />
+                        )}
+                        <div className={`mt-1.5 w-[11px] h-[11px] rounded-full shrink-0 border-2 border-surface-1 ${isComment ? 'bg-text-tertiary' : 'bg-accent'}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-text-primary">
                             <span className="font-medium">{e.actor}</span>
-                            <span className="text-gray-400"> ({e.actorType})</span>
+                            <span className="text-text-tertiary"> ({e.actorType})</span>
                             {e.fromState && e.toState && (
-                              <span> · {e.fromState.label} <span className="text-gray-400">→</span> <span style={{ color: e.toState.color }}>{e.toState.label}</span></span>
+                              <span className="text-text-secondary"> · {e.fromState.label} <ArrowRight className="w-3 h-3 inline" /> <span style={{ color: e.toState.color }}>{e.toState.label}</span></span>
                             )}
                             {!e.fromState && e.toState && (
-                              <span> · created in <span style={{ color: e.toState.color }}>{e.toState.label}</span></span>
+                              <span className="text-text-secondary"> · created in <span style={{ color: e.toState.color }}>{e.toState.label}</span></span>
                             )}
                           </p>
                           {e.comment && (
-                            <p className={`text-sm mt-0.5 ${isComment ? 'text-gray-800 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100' : 'text-gray-600 italic'}`}>
+                            <p className={`text-sm mt-1 ${isComment ? 'text-text-primary bg-surface-2 rounded-lg px-3 py-2 border border-border' : 'text-text-secondary italic'}`}>
                               {isComment ? e.comment : `"${e.comment}"`}
                             </p>
                           )}
-                          <p className="text-xs text-gray-400 mt-0.5">{formatDate(e.createdAt)}</p>
+                          <p className="text-[11px] text-text-tertiary mt-0.5">{formatDate(e.createdAt)}</p>
                         </div>
                       </div>
                     )
@@ -366,22 +364,21 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               )}
 
-              {/* Add comment */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="mt-4 pt-4 border-t border-border">
                 <textarea
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) postComment() }}
                   placeholder="Add a comment… (Ctrl+Enter to submit)"
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="input-field text-sm resize-none"
                 />
-                {commentError && <p className="text-xs text-red-500 mt-1">{commentError}</p>}
+                {commentError && <p className="text-xs text-err mt-1">{commentError}</p>}
                 <div className="flex justify-end mt-2">
                   <button
                     onClick={postComment}
                     disabled={postingComment || !newComment.trim()}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                    className="px-3 py-1.5 bg-accent text-text-inverse text-xs font-display font-medium rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-40 transition-all"
                   >
                     {postingComment ? 'Posting…' : 'Comment'}
                   </button>
@@ -392,90 +389,87 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Sidebar */}
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+            <div className="card p-4 space-y-3">
               <div>
-                <p className="text-xs text-gray-500">State</p>
+                <p className="section-title mb-0.5">State</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: task.state.color }} />
-                  <span className="text-sm font-medium">{task.state.label}</span>
-                  {task.state.isBlocking && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 rounded">HITL</span>}
-                  {task.state.isTerminal && <span className="text-xs bg-gray-100 text-gray-600 px-1.5 rounded">done</span>}
+                  <span className="text-sm font-medium text-text-primary">{task.state.label}</span>
+                  {task.state.isBlocking && <span className="badge-warn text-[10px] py-0">HITL</span>}
+                  {task.state.isTerminal && <span className="badge-neutral text-[10px] py-0">done</span>}
                 </div>
               </div>
 
               <div>
-                <p className="text-xs text-gray-500">Workflow</p>
-                <Link href={`/workflows/${task.workflow.id}`} className="text-sm text-blue-600 hover:underline">{task.workflow.name}</Link>
+                <p className="section-title mb-0.5">Workflow</p>
+                <Link href={`/workflows/${task.workflow.id}`} className="text-sm text-accent hover:underline">{task.workflow.name}</Link>
               </div>
 
               <div>
-                <p className="text-xs text-gray-500">Priority</p>
+                <p className="section-title mb-0.5">Priority</p>
                 <p className={`text-sm font-medium ${priorityColor(task.priority)}`}>{priorityLabel(task.priority)}</p>
               </div>
 
               {task.assignedTo && (
                 <div>
-                  <p className="text-xs text-gray-500">Assigned to</p>
-                  <p className="text-sm font-mono">{task.assignedTo}</p>
+                  <p className="section-title mb-0.5">Assigned to</p>
+                  <p className="text-sm font-mono text-text-primary">{task.assignedTo}</p>
                 </div>
               )}
 
               <div>
-                <p className="text-xs text-gray-500">Created by</p>
-                <p className="text-sm">{task.createdBy}</p>
+                <p className="section-title mb-0.5">Created by</p>
+                <p className="text-sm text-text-primary">{task.createdBy}</p>
               </div>
 
               <div>
-                <p className="text-xs text-gray-500">Created</p>
-                <p className="text-xs text-gray-700">{formatDate(task.createdAt)}</p>
+                <p className="section-title mb-0.5">Created</p>
+                <p className="text-xs text-text-secondary">{formatDate(task.createdAt)}</p>
               </div>
 
               <div>
-                <p className="text-xs text-gray-500">Updated</p>
-                <p className="text-xs text-gray-700">{formatDate(task.updatedAt)}</p>
+                <p className="section-title mb-0.5">Updated</p>
+                <p className="text-xs text-text-secondary">{formatDate(task.updatedAt)}</p>
               </div>
             </div>
 
-            {/* Processing indicator */}
             {processing && (
-              <div className="bg-blue-50 border border-blue-300 rounded-xl p-4 space-y-2 animate-pulse">
+              <div className="card p-4 space-y-2 animate-pulse-glow border-accent/30">
                 <div className="flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-ping" />
-                  <p className="text-xs font-semibold text-blue-800">Agent is working…</p>
+                  <Cpu className="w-4 h-4 text-accent animate-pulse" />
+                  <p className="text-xs font-display font-semibold text-accent uppercase tracking-wider">Agent is working…</p>
                 </div>
-                <p className="text-xs text-blue-600">Page will refresh automatically when done.</p>
+                <p className="text-xs text-text-secondary">Page will refresh automatically when done.</p>
               </div>
             )}
 
-            {/* Process now — shown when current state has an agent */}
             {task.state.agentId && !task.state.isTerminal && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+              <div className="card p-4 space-y-2 border-accent/20">
                 <div className="flex items-center gap-2">
-                  <span className="text-blue-500">🤖</span>
-                  <p className="text-xs font-semibold text-blue-800">Agent assigned</p>
+                  <Bot className="w-4 h-4 text-accent" />
+                  <p className="text-xs font-display font-semibold text-text-primary uppercase tracking-wider">Agent assigned</p>
                 </div>
-                <p className="text-xs text-blue-700 font-mono">{task.state.agentId}</p>
+                <p className="text-xs text-accent font-mono">{task.state.agentId}</p>
                 <button
                   onClick={async () => { setProcessing(true); await invokeAgent() }}
                   disabled={invoking || processing}
-                  className="w-full px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="w-full px-3 py-1.5 bg-accent text-text-inverse text-xs font-display font-medium rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
                 >
                   {invoking || processing ? 'Processing…' : 'Process now'}
                 </button>
                 {invokeMsg && (
-                  <p className={`text-xs ${invokeMsg.includes('invoked') ? 'text-blue-700' : 'text-red-600'}`}>
+                  <p className={`text-xs ${invokeMsg.includes('invoked') ? 'text-accent' : 'text-err'}`}>
                     {invokeMsg}
                   </p>
                 )}
               </div>
             )}
 
-            {/* API hint for agents */}
-            <div className="bg-gray-900 rounded-xl p-4 text-xs text-gray-300 font-mono space-y-2">
-              <p className="text-gray-500 font-sans font-medium text-xs">Agent API</p>
-              <p>GET /api/v1/tasks/{task.id}</p>
-              <p>POST /api/v1/tasks/{task.id}/transition</p>
-              <pre className="text-gray-400 bg-gray-800 p-2 rounded text-xs overflow-auto">{JSON.stringify({ transitionName: transitions[0]?.name ?? 'transition_name', comment: 'optional' }, null, 2)}</pre>
+            <div className="bg-surface-1 rounded-xl p-4 text-xs text-text-tertiary font-mono space-y-2 border border-border">
+              <p className="section-title font-sans">Agent API</p>
+              <p className="text-accent">GET /api/v1/tasks/{task.id}</p>
+              <p className="text-accent">POST /api/v1/tasks/{task.id}/transition</p>
+              <pre className="text-text-tertiary bg-surface-2 p-2 rounded text-[11px] overflow-auto border border-border">{JSON.stringify({ transitionName: transitions[0]?.name ?? 'transition_name', comment: 'optional' }, null, 2)}</pre>
             </div>
           </div>
         </div>

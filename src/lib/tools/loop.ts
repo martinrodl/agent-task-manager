@@ -132,6 +132,20 @@ function appendToolResults(
   }
 }
 
+// ─── Sliding window — keep history within token budget ───────────────────────
+
+const MAX_HISTORY_CHARS = 200_000
+
+function trimHistory(messages: unknown[]): void {
+  if (messages.length <= 4) return
+  let totalChars = 0
+  for (const m of messages) totalChars += JSON.stringify(m).length
+  while (totalChars > MAX_HISTORY_CHARS && messages.length > 4) {
+    const removed = messages.splice(2, 1)[0]
+    totalChars -= JSON.stringify(removed).length
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function agenticLoop(
@@ -173,6 +187,9 @@ export async function agenticLoop(
   try {
     while (iterations < opts.maxIterations) {
       iterations++
+
+      // ── Trim history to stay within context window ──────────────────────
+      trimHistory(rawMessages)
 
       // ── LLM call ─────────────────────────────────────────────────────────
       let resp: ToolAwareResponse

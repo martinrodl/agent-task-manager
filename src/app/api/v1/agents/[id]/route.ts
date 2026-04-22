@@ -19,7 +19,8 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   return NextResponse.json({
     ...agent,
-    apiKey: auth.actorType === 'human' ? agent.apiKey : undefined,
+    apiKey:   auth.actorType === 'human' ? agent.apiKey   : undefined,
+    apiToken: auth.actorType === 'human' ? agent.apiToken : undefined,
   })
 }
 

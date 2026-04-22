@@ -33,6 +33,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 export async function PUT(req: NextRequest, { params }: Params) {
   const auth = await resolveActor(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (auth.actorType !== 'human') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
   const body = await req.json().catch(() => ({}))
@@ -57,8 +58,6 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
   const { id } = await params
 
-  // Detach workflows first (set projectId = null)
-  await prisma.workflow.updateMany({ where: { projectId: id }, data: { projectId: null } })
   await prisma.project.delete({ where: { id } })
 
   return NextResponse.json({ ok: true })

@@ -18,7 +18,12 @@ function fetchFullTask(id: string) {
     include: {
       state: true,
       workflow: {
-        include: {
+        select: {
+          id: true, name: true, description: true, projectId: true,
+          workspaceType: true, workspacePath: true,
+          githubRepo: true, githubBranch: true,
+          sandboxMode: true, dockerImage: true, gitCloneUrl: true,
+          createdAt: true, updatedAt: true,
           states: { orderBy: { sortOrder: 'asc' } },
           transitions: {
             include: { fromState: true, toState: true },
@@ -96,53 +101,53 @@ export async function executeTransition(
   result?: unknown,
   llmMeta?: LlmMeta,
 ): Promise<TransitionResult> {
-  const task = await prisma.task.findUniqueOrThrow({
-    where: { id: taskId },
-    include: { state: true },
-  })
-
-  if (task.state.isTerminal) {
-    throw new Error(`Task is in terminal state '${task.state.name}' — no further transitions allowed.`)
-  }
-
-  const transition = await prisma.workflowTransition.findFirst({
-    where: { workflowId: task.workflowId, fromStateId: task.stateId, name: transitionName },
-    include: { toState: true },
-  })
-
-  if (!transition) {
-    throw new Error(`Transition '${transitionName}' not found from state '${task.state.name}'.`)
-  }
-
-  if (!transition.allowedRoles.includes(actorType)) {
-    throw new Error(
-      `Transition '${transitionName}' is not allowed for role '${actorType}'. ` +
-      `Allowed roles: ${transition.allowedRoles.join(', ')}.`
-    )
-  }
-
-  if (transition.requiresComment && !comment?.trim()) {
-    throw new Error(`Transition '${transitionName}' requires a comment.`)
-  }
-
-  // Auto-assign agent if the target state has one configured
-  const autoAssign = transition.toState.agentId
-
-  const [updatedTask, event] = await prisma.$transaction([
-    prisma.task.update({
+  const { updatedTask, event, task, transition } = await prisma.$transaction(async (tx) => {
+    const t = await tx.task.findUniqueOrThrow({
       where: { id: taskId },
+      include: { state: true },
+    })
+
+    if (t.state.isTerminal) {
+      throw new Error(`Task is in terminal state '${t.state.name}' — no further transitions allowed.`)
+    }
+
+    const tr = await tx.workflowTransition.findFirst({
+      where: { workflowId: t.workflowId, fromStateId: t.stateId, name: transitionName },
+      include: { toState: true },
+    })
+
+    if (!tr) {
+      throw new Error(`Transition '${transitionName}' not found from state '${t.state.name}'.`)
+    }
+
+    if (!tr.allowedRoles.includes(actorType)) {
+      throw new Error(
+        `Transition '${transitionName}' is not allowed for role '${actorType}'. ` +
+        `Allowed roles: ${tr.allowedRoles.join(', ')}.`
+      )
+    }
+
+    if (tr.requiresComment && !comment?.trim()) {
+      throw new Error(`Transition '${transitionName}' requires a comment.`)
+    }
+
+    const autoAssign = tr.toState.agentId
+
+    const updated = await tx.task.update({
+      where: { id: taskId, stateId: t.stateId },
       data: {
-        stateId: transition.toStateId,
+        stateId: tr.toStateId,
         ...(result !== undefined ? { result: result as object } : {}),
         ...(autoAssign ? { assignedTo: autoAssign } : {}),
         updatedAt: new Date(),
       },
-    }),
-    prisma.taskEvent.create({
+    })
+
+    const evt = await tx.taskEvent.create({
       data: {
         taskId,
-        fromStateId: task.stateId,
-        toStateId: transition.toStateId,
+        fromStateId: t.stateId,
+        toStateId: tr.toStateId,
         actor,
         actorType,
         comment: comment ?? null,
@@ -159,8 +164,10 @@ export async function executeTransition(
           } : {}),
         },
       },
-    }),
-  ])
+    })
+
+    return { updatedTask: updated, event: evt, task: t, transition: tr }
+  })
 
   const full = await fetchFullTask(updatedTask.id)
 

@@ -37,7 +37,10 @@ spec:
         - name: POSTGRES_USER
           value: agenttask
         - name: POSTGRES_PASSWORD
-          value: secret
+          valueFrom:
+            secretKeyRef:
+              name: agenttask-secrets
+              key: POSTGRES_PASSWORD
         volumeMounts:
         - name: postgres-storage
           mountPath: /var/lib/postgresql/data

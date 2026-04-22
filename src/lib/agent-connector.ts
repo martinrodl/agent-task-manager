@@ -101,6 +101,7 @@ async function callOllama(cfg: AgentConfig, messages: ChatMessage[]): Promise<Ch
       stream:   false,
       options: { temperature: cfg.temperature, num_predict: cfg.maxTokens },
     }),
+    signal: AbortSignal.timeout(120_000),
   })
 
   if (!res.ok) {
@@ -139,6 +140,7 @@ async function callOpenAICompat(cfg: AgentConfig, messages: ChatMessage[]): Prom
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(120_000),
   })
 
   if (!res.ok) {
@@ -177,6 +179,7 @@ async function callAnthropic(cfg: AgentConfig, messages: ChatMessage[]): Promise
       ...(systemMsg ? { system: systemMsg } : {}),
       messages:   chatMsgs.map(m => ({ role: m.role, content: m.content })),
     }),
+    signal: AbortSignal.timeout(120_000),
   })
 
   if (!res.ok) {
@@ -424,6 +427,7 @@ export async function callOllamaWithTools(
       stream:   false,
       options: { temperature: cfg.temperature, num_predict: cfg.maxTokens },
     }),
+    signal: AbortSignal.timeout(120_000),
   })
 
   if (!res.ok) {

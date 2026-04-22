@@ -11,10 +11,10 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'asc' },
     include: { aiProvider: { select: { id: true, name: true, model: true, provider: true } } },
   })
-  // Strip apiKey from non-human responses
   const safe = agents.map(a => ({
     ...a,
-    apiKey: auth.actorType === 'human' ? a.apiKey : undefined,
+    apiKey:   auth.actorType === 'human' ? a.apiKey   : undefined,
+    apiToken: auth.actorType === 'human' ? a.apiToken : undefined,
   }))
   return NextResponse.json(safe)
 }

@@ -126,7 +126,7 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
     <div className="relative" ref={ref}>
       <button
         onClick={() => { setOpen(!open); setError('') }}
-        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-warn bg-warn-dim border border-warn/20 rounded-lg hover:bg-warn-dim transition-colors"
         title="Generate with AI"
       >
         <span>✨</span>
@@ -134,17 +134,17 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-[420px] bg-white border border-gray-200 rounded-xl shadow-2xl p-5 space-y-4">
+        <div className="absolute right-0 top-full mt-2 z-50 w-[420px] bg-surface-1 border border-border rounded-xl shadow-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-lg">✨</span>
-              <p className="font-semibold text-gray-900">AI {TITLES[type]}</p>
+              <p className="font-semibold text-text-primary">AI {TITLES[type]}</p>
             </div>
-            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            <button onClick={() => setOpen(false)} className="text-text-tertiary hover:text-text-secondary text-xl leading-none">×</button>
           </div>
 
           {providers.length === 0 ? (
-            <div className="text-sm text-amber-700 bg-amber-50 rounded-lg p-3">
+            <div className="text-sm text-warn bg-warn-dim rounded-lg p-3">
               No AI providers configured. <a href="/settings" className="underline font-medium">Go to Settings →</a>
             </div>
           ) : (
@@ -153,7 +153,7 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
                 const sel = providers.find(p => p.id === providerId)
                 const needsKey = sel && ['anthropic','openai','azure','openrouter'].includes(sel.provider)
                 if (needsKey && !sel.apiKey) return (
-                  <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="text-sm text-warn bg-warn-dim border border-warn/20 rounded-lg p-3">
                     <strong>{sel.name}</strong> has no API key stored.{' '}
                     <a href="/settings" className="underline font-medium">Go to Settings → AI Providers</a> and re-enter the key.
                   </div>
@@ -162,11 +162,11 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
               })()}
               {providers.length > 1 && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">AI Provider</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">AI Provider</label>
                   <select
                     value={providerId}
                     onChange={e => setProviderId(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-warn"
                   >
                     {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.model})</option>)}
                   </select>
@@ -174,7 +174,7 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
               )}
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Describe what you want</label>
+                <label className="block text-xs font-medium text-text-secondary mb-1">Describe what you want</label>
                 <textarea
                   value={prompt}
                   onChange={e => setPrompt(e.target.value)}
@@ -182,21 +182,21 @@ export function AiAssistButton<T extends keyof ResultMap>({ type, onResult, labe
                   placeholder={PLACEHOLDERS[type]}
                   rows={3}
                   autoFocus
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-warn"
                 />
               </div>
 
-              {error && <p className="text-xs text-red-600">{error}</p>}
+              {error && <p className="text-xs text-err">{error}</p>}
 
               <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-400">Ctrl+Enter to generate</p>
+                <p className="text-xs text-text-tertiary">Ctrl+Enter to generate</p>
                 <button
                   onClick={generate}
                   disabled={loading || !prompt.trim() || (() => {
                     const sel = providers.find(p => p.id === providerId)
                     return !!(sel && ['anthropic','openai','azure','openrouter'].includes(sel.provider) && !sel.apiKey)
                   })()}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-warn text-text-inverse text-sm font-medium rounded-lg hover:shadow-md disabled:opacity-50 transition-colors"
                 >
                   {loading ? (
                     <><span className="animate-spin inline-block">⟳</span><span>Generating…</span></>

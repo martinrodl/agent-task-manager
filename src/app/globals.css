@@ -2,14 +2,244 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ───────────────────────────────────────────────────────────
+   Single source of truth for every visual property.
+   Toggle .dark on <html> to swap palettes — zero component changes.
+
+   Palette : Indigo-Slate ("Blurple")
+   Fonts   : Plus Jakarta Sans / DM Sans / Fira Code
+   Trend   : 2026 SaaS — zinc neutrals, indigo primary, semantic accents
+   ═══════════════════════════════════════════════════════════ */
+
 @layer base {
-  html { @apply h-full; }
-  body { @apply h-full bg-gray-50 text-gray-900 antialiased; }
+
+  /* ─── LIGHT ─────────────────────────────────────────────── */
+  :root {
+    /* Surfaces (zinc scale, warm-neutral) */
+    --surface-0: #f4f4f5;          /* zinc-100  page bg */
+    --surface-1: #ffffff;           /* white     card bg */
+    --surface-2: #f4f4f5;          /* zinc-100  input bg / hover */
+    --surface-3: #e4e4e7;          /* zinc-200  elevated / pressed */
+
+    /* Borders */
+    --border: rgba(0, 0, 0, 0.07);
+    --border-strong: rgba(0, 0, 0, 0.14);
+
+    /* Primary — indigo */
+    --accent: #6366f1;             /* indigo-500 */
+    --accent-dim: rgba(99, 102, 241, 0.08);
+    --accent-glow: rgba(99, 102, 241, 0.22);
+
+    /* Semantic */
+    --warn: #d97706;               /* amber-600 */
+    --warn-dim: rgba(217, 119, 6, 0.08);
+    --ok: #059669;                 /* emerald-600 */
+    --ok-dim: rgba(5, 150, 105, 0.08);
+    --err: #e11d48;                /* rose-600 */
+    --err-dim: rgba(225, 29, 72, 0.06);
+
+    /* Text */
+    --text-primary: #09090b;       /* zinc-950 */
+    --text-secondary: #52525b;     /* zinc-600 */
+    --text-tertiary: #a1a1aa;      /* zinc-400 */
+    --text-inverse: #ffffff;
+
+    /* Shadows */
+    --shadow-inner-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--border);
+
+    /* Misc */
+    --noise-opacity: 0;
+    --gradient-secondary: #a78bfa; /* violet-400 for gradients */
+    color-scheme: light;
+  }
+
+  /* ─── DARK ──────────────────────────────────────────────── */
+  :root.dark {
+    /* Surfaces (zinc scale, true neutral) */
+    --surface-0: #09090b;          /* zinc-950  page bg */
+    --surface-1: #18181b;          /* zinc-900  card bg */
+    --surface-2: #27272a;          /* zinc-800  input bg / hover */
+    --surface-3: #3f3f46;          /* zinc-700  elevated / pressed */
+
+    /* Borders */
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.14);
+
+    /* Primary — indigo (brighter on dark) */
+    --accent: #818cf8;             /* indigo-400 */
+    --accent-dim: rgba(129, 140, 248, 0.12);
+    --accent-glow: rgba(129, 140, 248, 0.30);
+
+    /* Semantic (lighter on dark for readability) */
+    --warn: #fbbf24;               /* amber-400 */
+    --warn-dim: rgba(251, 191, 36, 0.12);
+    --ok: #34d399;                 /* emerald-400 */
+    --ok-dim: rgba(52, 211, 153, 0.12);
+    --err: #fb7185;                /* rose-400 */
+    --err-dim: rgba(251, 113, 133, 0.10);
+
+    /* Text */
+    --text-primary: #fafafa;       /* zinc-50 */
+    --text-secondary: #a1a1aa;     /* zinc-400 */
+    --text-tertiary: #52525b;      /* zinc-600 */
+    --text-inverse: #09090b;       /* zinc-950 */
+
+    /* Shadows */
+    --shadow-inner-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border);
+
+    /* Misc */
+    --noise-opacity: 0.012;
+    --gradient-secondary: #c4b5fd; /* violet-300 */
+    color-scheme: dark;
+  }
+
+  /* ─── Typography (shared) ───────────────────────────────── */
+  :root {
+    --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'Fira Code', 'Cascadia Code', monospace;
+  }
+
+  /* ─── Resets ────────────────────────────────────────────── */
+  html {
+    @apply h-full;
+  }
+
+  body {
+    @apply h-full bg-surface-0 text-text-primary antialiased;
+    font-family: var(--font-body);
+    transition: background-color 0.3s ease, color 0.2s ease;
+  }
+
+  ::selection {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  select, option {
+    background-color: var(--surface-2);
+    color: var(--text-primary);
+  }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   COMPONENTS
+   ═══════════════════════════════════════════════════════════ */
+
+@layer components {
+
+  /* ── Cards ──────────────────────────────────────────────── */
+  .card {
+    @apply bg-surface-1 rounded-xl border border-border;
+    box-shadow: var(--shadow-inner-glow);
+  }
+  .card-interactive {
+    @apply card transition-all duration-200;
+  }
+  .card-interactive:hover {
+    @apply border-border-strong;
+    background: var(--surface-2);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ── Inputs ─────────────────────────────────────────────── */
+  .input-field {
+    @apply w-full px-3 py-2 bg-surface-2 border border-border rounded-lg
+           text-sm text-text-primary
+           placeholder:text-text-tertiary
+           transition-all duration-200;
+    font-family: var(--font-body);
+  }
+  .input-field:focus {
+    @apply outline-none border-accent ring-1 ring-accent-glow;
+    box-shadow: 0 0 12px -4px var(--accent-glow);
+  }
+
+  /* ── Badges ─────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold;
+    font-family: var(--font-display);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .badge-accent  { @apply badge bg-accent-dim text-accent; }
+  .badge-warn    { @apply badge bg-warn-dim text-warn; }
+  .badge-ok      { @apply badge bg-ok-dim text-ok; }
+  .badge-err     { @apply badge bg-err-dim text-err; }
+  .badge-neutral { @apply badge bg-surface-3 text-text-secondary; }
+
+  /* ── Typography helpers ─────────────────────────────────── */
+  .section-title {
+    font-family: var(--font-display);
+    @apply text-xs font-bold text-text-tertiary uppercase tracking-widest;
+  }
+  .stat-value {
+    font-family: var(--font-display);
+    @apply text-3xl font-extrabold text-text-primary tracking-tight;
+  }
+
+  /* ── Buttons ────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2
+           bg-accent text-text-inverse text-sm rounded-lg
+           font-semibold tracking-wide uppercase
+           transition-all duration-200 active:scale-[0.97]
+           disabled:opacity-40 disabled:pointer-events-none;
+    font-family: var(--font-display);
+    box-shadow: 0 0 10px -2px var(--accent-glow);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 0 24px -4px var(--accent-glow);
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2
+           bg-surface-2 text-text-primary text-sm rounded-lg border border-border
+           font-medium tracking-wide
+           transition-all duration-200
+           disabled:opacity-40 disabled:pointer-events-none;
+    font-family: var(--font-display);
+  }
+  .btn-secondary:hover {
+    @apply border-border-strong bg-surface-3;
+  }
+
+  /* ── Decorations ────────────────────────────────────────── */
+  .glow-line {
+    @apply h-px w-full;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.3;
+  }
+  .noise-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: var(--noise-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════════ */
 
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #d1d5db transparent;
+    scrollbar-color: var(--surface-3) transparent;
+  }
+  .text-gradient {
+    background: linear-gradient(135deg, var(--accent), var(--gradient-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }

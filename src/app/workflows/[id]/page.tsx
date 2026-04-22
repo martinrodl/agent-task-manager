@@ -29,31 +29,31 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
   return (
     <div className="flex h-full">
       <Nav reviewCount={blocking} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto bg-surface-0">
         <div className="max-w-5xl mx-auto p-8">
           <div className="mb-6">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
               {workflow.project ? (
                 <>
-                  <Link href="/projects" className="hover:text-gray-700">Projects</Link>
+                  <Link href="/projects" className="hover:text-text-primary">Projects</Link>
                   <span>/</span>
-                  <Link href={`/projects/${workflow.project.id}`} className="hover:text-gray-700">{workflow.project.name}</Link>
+                  <Link href={`/projects/${workflow.project.id}`} className="hover:text-text-primary">{workflow.project.name}</Link>
                   <span>/</span>
-                  <span className="text-gray-400">Workflows</span>
+                  <span className="text-text-tertiary">Workflows</span>
                 </>
               ) : (
-                <Link href="/workflows" className="hover:text-gray-700">← Workflows</Link>
+                <Link href="/workflows" className="hover:text-text-primary">← Workflows</Link>
               )}
             </div>
             <div className="flex items-center justify-between mt-2">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{workflow.name}</h1>
-                {workflow.description && <p className="text-sm text-gray-500 mt-0.5">{workflow.description}</p>}
+                <h1 className="text-2xl font-bold text-text-primary">{workflow.name}</h1>
+                {workflow.description && <p className="text-sm text-text-secondary mt-0.5">{workflow.description}</p>}
               </div>
               <div className="flex gap-3">
                 <Link
                   href={`/tasks/new?workflowId=${workflow.id}`}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-3 py-1.5 bg-accent text-text-inverse text-sm font-medium rounded-lg hover:shadow-glow transition-colors"
                 >
                   + New task
                 </Link>
@@ -62,14 +62,14 @@ export default async function WorkflowDetailPage({ params }: { params: Promise<{
           </div>
 
           {/* Kanban */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Kanban ({workflow._count.tasks} tasks)</h2>
+          <div className="bg-surface-1 rounded-xl border border-border p-5 mb-6">
+            <h2 className="font-semibold text-text-primary mb-4">Kanban ({workflow._count.tasks} tasks)</h2>
             <KanbanBoard workflowId={workflow.id} />
           </div>
 
           {/* Builder */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="font-semibold text-gray-900 mb-4">Configure workflow</h2>
+          <div className="bg-surface-1 rounded-xl border border-border p-5">
+            <h2 className="font-semibold text-text-primary mb-4">Configure workflow</h2>
             <WorkflowBuilder
               agents={agents}
               workflow={{

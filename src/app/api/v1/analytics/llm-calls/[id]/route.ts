@@ -25,3 +25,16 @@ export async function GET(
   if (!call) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(call)
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await resolveActor(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (auth.actorType !== 'human') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { id } = await params
+  await prisma.llmCall.delete({ where: { id } })
+  return NextResponse.json({ ok: true })
+}

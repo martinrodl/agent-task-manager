@@ -42,3 +42,24 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ data, total, limit, offset })
 }
+
+export async function DELETE(req: NextRequest) {
+  const auth = await resolveActor(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (auth.actorType !== 'human') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = await req.json().catch(() => ({}))
+  const ids: string[] | undefined = body.ids
+
+  if (ids && Array.isArray(ids) && ids.length > 0) {
+    const { count } = await prisma.llmCall.deleteMany({ where: { id: { in: ids } } })
+    return NextResponse.json({ ok: true, deleted: count })
+  }
+
+  if (body.deleteAll === true) {
+    const { count } = await prisma.llmCall.deleteMany({})
+    return NextResponse.json({ ok: true, deleted: count })
+  }
+
+  return NextResponse.json({ error: 'Provide "ids" array or "deleteAll": true' }, { status: 400 })
+}

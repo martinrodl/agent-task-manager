@@ -45,7 +45,7 @@ model Workflow {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project     Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project     Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   states      WorkflowState[]
   transitions WorkflowTransition[]
   tasks       Task[]
@@ -195,12 +195,17 @@ model Task {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  workflow Workflow      @relation(fields: [workflowId], references: [id])
-  state    WorkflowState @relation(fields: [stateId], references: [id])
-  parent   Task?         @relation("Subtasks", fields: [parentId], references: [id])
+  workflow Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  state    WorkflowState @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  parent   Task?         @relation("Subtasks", fields: [parentId], references: [id], onDelete: SetNull)
   subtasks Task[]        @relation("Subtasks")
   events   TaskEvent[]
   llmCalls LlmCall[]
+
+  @@index([workflowId])
+  @@index([stateId])
+  @@index([workflowId, stateId])
+  @@index([assignedTo])
 }
 
 model TaskEvent {
@@ -218,6 +223,8 @@ model TaskEvent {
   fromState WorkflowState? @relation("EventFromState", fields: [fromStateId], references: [id])
   toState   WorkflowState? @relation("EventToState", fields: [toStateId], references: [id])
   llmCall   LlmCall?
+
+  @@index([taskId])
 }
 
 model LlmCall {
@@ -256,4 +263,7 @@ model LlmCall {
 
   task      Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   taskEvent TaskEvent? @relation(fields: [taskEventId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([createdAt])
 }

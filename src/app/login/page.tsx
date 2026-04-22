@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { Zap } from 'lucide-react'
 
 function LoginForm() {
   const router = useRouter()
@@ -23,7 +24,9 @@ function LoginForm() {
     })
 
     if (res.ok) {
-      router.push(searchParams.get('from') ?? '/')
+      const from = searchParams.get('from') ?? '/'
+      const safeDest = from.startsWith('/') && !from.startsWith('//') ? from : '/'
+      router.push(safeDest)
     } else {
       setError('Invalid password')
       setLoading(false)
@@ -31,38 +34,41 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-full flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm">
+    <div className="min-h-full flex items-center justify-center bg-surface-0 relative">
+      {/* Background effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-accent/[0.04] rounded-full blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-sm relative">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-xl mb-4">
-            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-accent/15 ring-1 ring-accent/20 mb-5">
+            <Zap className="w-7 h-7 text-accent" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">AgentTask</h1>
-          <p className="text-sm text-gray-500 mt-1">Task management for agentic workflows</p>
+          <h1 className="font-display text-2xl font-bold text-text-primary tracking-tight">AgentTask</h1>
+          <p className="text-sm text-text-tertiary mt-1">Task management for agentic workflows</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white shadow-sm border border-gray-200 rounded-xl p-8 space-y-4">
+        <form onSubmit={handleSubmit} className="card p-8 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Admin password</label>
+            <label className="section-title mb-2 block">Admin password</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="input-field"
               placeholder="••••••••"
               required
               autoFocus
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-err">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="w-full py-2.5 bg-accent text-text-inverse font-display font-semibold rounded-lg tracking-wide uppercase shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all duration-200 active:scale-[0.98]"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>

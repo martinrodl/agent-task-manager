@@ -1,5 +1,16 @@
 import type { ToolProvider, ToolDefinition, ToolContext, ToolResult } from './types'
 
+const BLOCKED_HOSTS = /^(127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|0\.0\.0\.0|localhost|\[::1?\])$/i
+
+function isBlockedUrl(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr)
+    return BLOCKED_HOSTS.test(u.hostname)
+  } catch {
+    return true
+  }
+}
+
 export class HttpProvider implements ToolProvider {
   readonly name = 'http'
 
@@ -29,6 +40,10 @@ export class HttpProvider implements ToolProvider {
       body,
       timeoutMs = 30_000,
     } = args as { method?: string; url: string; headers?: Record<string,string>; body?: string; timeoutMs?: number }
+
+    if (isBlockedUrl(url)) {
+      return { success: false, output: null, error: 'Requests to private/internal networks are blocked' }
+    }
 
     try {
       const res = await fetch(url, {

@@ -39,6 +39,7 @@ import { resolveActor } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   const auth = await resolveActor(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (auth.actorType !== 'human') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json().catch(() => null)
   if (!body?.name) return NextResponse.json({ error: 'name is required' }, { status: 400 })

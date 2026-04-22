@@ -1,9 +1,23 @@
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
+import { writeFile, unlink } from 'fs/promises'
 import path from 'path'
+import os from 'os'
 import type { ToolProvider, ToolDefinition, ToolContext, ToolResult } from './types'
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
+
+const SENSITIVE_ENV_KEYS = new Set([
+  'SECRET_KEY', 'ADMIN_PASSWORD', 'AGENT_API_KEY', 'ORCHESTRATOR_API_KEY',
+  'DATABASE_URL', 'LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY',
+])
+
+function safeProcessEnv(): Record<string, string | undefined> {
+  const env = { ...process.env }
+  for (const key of SENSITIVE_ENV_KEYS) delete env[key]
+  return env
+}
 
 // ─── Docker container lifecycle ───────────────────────────────────────────────
 // In docker sandbox mode we start one container per task (stateful) so the
@@ -14,27 +28,31 @@ async function startContainer(context: ToolContext): Promise<string> {
   const taskDir  = context.taskWorkspaceDir ?? '/tmp'
   const sharedDir = context.workspacePath
 
-  const mounts = [
-    `-v "${taskDir}:/workspace"`,
-    sharedDir ? `-v "${sharedDir}:${sharedDir}:ro"` : '',   // project dir read-only
-  ].filter(Boolean).join(' ')
+  const args = ['run', '-d', '--rm', '--network=host']
+  args.push('-v', `${taskDir}:/workspace`)
+  if (sharedDir) args.push('-v', `${sharedDir}:${sharedDir}:ro`)
+  args.push('-w', '/workspace', image, 'tail', '-f', '/dev/null')
 
-  // network=host so container can reach localhost services (e.g. the web app under test)
-  const cmd = `docker run -d --rm --network=host ${mounts} -w /workspace ${image} tail -f /dev/null`
-  const { stdout } = await execAsync(cmd, { timeout: 30_000 })
-  return stdout.trim()  // container ID
+  const { stdout } = await execFileAsync('docker', args, { timeout: 30_000 })
+  return stdout.trim()
 }
 
 async function stopContainer(containerId: string): Promise<void> {
-  await execAsync(`docker stop ${containerId}`).catch(() => {})
+  await execFileAsync('docker', ['stop', containerId]).catch(() => {})
 }
 
 async function execInContainer(containerId: string, command: string, envVars: Record<string, string>, timeoutMs: number): Promise<{ stdout: string; stderr: string }> {
-  const envFlags = Object.entries(envVars)
-    .map(([k, v]) => `-e ${k}=${JSON.stringify(v)}`)
-    .join(' ')
-  const wrapped = `docker exec ${envFlags} ${containerId} bash -c ${JSON.stringify(command)}`
-  return execAsync(wrapped, { timeout: timeoutMs, maxBuffer: 1024 * 1024 })
+  const envFile = path.join(os.tmpdir(), `agenttask-env-${containerId.slice(0, 12)}-${Date.now()}`)
+  try {
+    const envContent = Object.entries(envVars)
+      .map(([k, v]) => `${k}=${v.replace(/\n/g, '\\n')}`)
+      .join('\n')
+    await writeFile(envFile, envContent, { mode: 0o600 })
+    const args = ['exec', '--env-file', envFile, containerId, 'bash', '-c', command]
+    return await execFileAsync('docker', args, { timeout: timeoutMs, maxBuffer: 1024 * 1024 })
+  } finally {
+    await unlink(envFile).catch(() => {})
+  }
 }
 
 // ─── BashProvider ─────────────────────────────────────────────────────────────
@@ -64,16 +82,17 @@ export class BashProvider implements ToolProvider {
       console.log(`[bash] Running setupScript for task ${context.taskId}`)
       try {
         const cwd = context.taskWorkspaceDir ?? context.workspacePath ?? process.cwd()
+        const setupEnv: Record<string, string | undefined> = {
+          ...safeProcessEnv(),
+          ...context.envVars,
+          TASK_ID:        context.taskId,
+          WORKSPACE_PATH: context.workspacePath ?? '',
+        }
         const { stdout, stderr } = await execAsync(context.setupScript, {
           cwd,
           timeout:   120_000,   // 2 min for service startup
           shell:     '/bin/bash',
-          env: {
-            ...process.env,
-            ...context.envVars,
-            TASK_ID:        context.taskId,
-            WORKSPACE_PATH: context.workspacePath ?? '',
-          },
+          env:       setupEnv as NodeJS.ProcessEnv,
           maxBuffer: 2 * 1024 * 1024,
         })
         if (stdout.trim()) console.log(`[bash:setup] stdout:\n${stdout.trim()}`)
@@ -88,7 +107,7 @@ export class BashProvider implements ToolProvider {
     // 2. Start agent sandbox container if docker mode
     if (context.sandboxMode !== 'docker') return
 
-    await execAsync('docker info', { timeout: 5_000 }).catch(() => {
+    await execFileAsync('docker', ['info'], { timeout: 5_000 }).catch(() => {
       throw new Error('Docker sandbox mode requires Docker to be running. Run `docker info` to check.')
     })
 
@@ -110,14 +129,14 @@ export class BashProvider implements ToolProvider {
     // Convention: containers are named "${TASK_ID}-<service>" (e.g. "cmxyz-db", "cmxyz-be").
     if (context.setupScript) {
       try {
-        const { stdout } = await execAsync(
-          `docker ps -aq --filter "name=${context.taskId}-"`,
+        const { stdout } = await execFileAsync(
+          'docker', ['ps', '-aq', '--filter', `name=${context.taskId}-`],
           { timeout: 5_000 },
-        ).catch(() => ({ stdout: '' }))
+        ).catch(() => ({ stdout: '', stderr: '' }))
         const ids = stdout.trim().split('\n').filter(Boolean)
         if (ids.length > 0) {
-          await execAsync(`docker stop ${ids.join(' ')}`, { timeout: 30_000 }).catch(() => {})
-          await execAsync(`docker rm   ${ids.join(' ')}`, { timeout: 10_000 }).catch(() => {})
+          await execFileAsync('docker', ['stop', ...ids], { timeout: 30_000 }).catch(() => {})
+          await execFileAsync('docker', ['rm', ...ids], { timeout: 10_000 }).catch(() => {})
           console.log(`[bash] Cleaned up ${ids.length} service container(s) for task ${context.taskId}`)
         }
       } catch {
@@ -180,7 +199,7 @@ export class BashProvider implements ToolProvider {
     const { stdout, stderr } = await execAsync(command, {
       cwd,
       timeout:   timeoutMs,
-      env:       { ...process.env, ...context.envVars },
+      env:       { ...safeProcessEnv(), ...context.envVars } as unknown as NodeJS.ProcessEnv,
       maxBuffer: 1024 * 1024,
     })
     return { success: true, output: { stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 } }

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { fetchJSON } from '@/lib/fetch'
 import { AiAssistButton, type TaskResult } from '@/components/ai-assist'
+import { ArrowLeft } from 'lucide-react'
 
 interface Workflow { id: string; name: string }
 
@@ -78,18 +79,19 @@ function NewTaskForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-surface-0 p-8">
       <div className="max-w-lg mx-auto">
         <div className="flex items-start justify-between mb-6">
           <div>
-            <Link href={parentId ? `/tasks/${parentId}` : '/tasks'} className="text-sm text-gray-500 hover:text-gray-700">
-              {parentId ? '← Parent task' : '← Tasks'}
+            <Link href={parentId ? `/tasks/${parentId}` : '/tasks'} className="inline-flex items-center gap-1 text-sm text-text-tertiary hover:text-text-secondary transition-colors">
+              <ArrowLeft className="w-3.5 h-3.5" />
+              {parentId ? 'Parent task' : 'Tasks'}
             </Link>
-            <h1 className="text-2xl font-bold text-gray-900 mt-2">
+            <h1 className="font-display text-2xl font-bold text-text-primary mt-2 tracking-tight">
               {parentId ? 'New subtask' : 'New task'}
             </h1>
             {parentId && (
-              <p className="text-xs text-gray-400 mt-0.5 font-mono">parent: {parentId.slice(-8)}</p>
+              <p className="text-xs text-text-tertiary mt-0.5 font-mono">parent: {parentId.slice(-8)}</p>
             )}
           </div>
           <div className="mt-7">
@@ -97,13 +99,13 @@ function NewTaskForm() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="card p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Workflow *</label>
+            <label className="section-title mb-1.5 block">Workflow <span className="text-err">*</span></label>
             <select
               value={workflowId}
               onChange={e => setWorkflowId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input-field"
               required
             >
               <option value="">Select workflow…</option>
@@ -114,44 +116,44 @@ function NewTaskForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+            <label className="section-title mb-1.5 block">Title <span className="text-err">*</span></label>
             <input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="e.g. Implement OAuth login"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input-field"
               required autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="section-title mb-1.5 block">Description</label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="input-field resize-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Assign to agent</label>
+              <label className="section-title mb-1.5 block">Assign to agent</label>
               <input
                 type="text"
                 value={assignedTo}
                 onChange={e => setAssignedTo(e.target.value)}
                 placeholder="agent-id or leave blank"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="input-field"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="section-title mb-1.5 block">
                 Priority
                 {priority !== '0' && (
-                  <span className={`ml-2 text-xs font-normal ${
-                    priority === '3' ? 'text-red-500' : priority === '2' ? 'text-orange-500' : 'text-yellow-600'
+                  <span className={`ml-2 text-xs font-normal normal-case tracking-normal ${
+                    priority === '3' ? 'text-err' : priority === '2' ? 'text-warn' : 'text-accent'
                   }`}>
                     {PRIORITY_LABELS[Number(priority)]}
                   </span>
@@ -160,7 +162,7 @@ function NewTaskForm() {
               <select
                 value={priority}
                 onChange={e => setPriority(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="input-field"
               >
                 <option value="0">Low</option>
                 <option value="1">Medium</option>
@@ -171,29 +173,29 @@ function NewTaskForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Context <span className="font-normal text-gray-400">(JSON metadata for agent)</span>
+            <label className="section-title mb-1.5 block">
+              Context <span className="font-normal normal-case tracking-normal text-text-tertiary">(JSON metadata for agent)</span>
             </label>
             <textarea
               value={context}
               onChange={e => { setContext(e.target.value); validateContext(e.target.value) }}
               rows={4}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm ${contextError ? 'border-red-400' : 'border-gray-300'}`}
+              className={`input-field resize-none font-mono text-xs ${contextError ? 'border-err focus:border-err focus:ring-err/30' : ''}`}
             />
-            {contextError && <p className="text-xs text-red-500 mt-1">{contextError}</p>}
+            {contextError && <p className="text-xs text-err mt-1">{contextError}</p>}
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-err">{error}</p>}
 
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-accent text-text-inverse text-sm font-display font-semibold rounded-lg tracking-wide uppercase shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all duration-200 active:scale-[0.98]"
             >
               {loading ? 'Creating…' : 'Create task'}
             </button>
-            <Link href="/tasks" className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancel</Link>
+            <Link href="/tasks" className="px-4 py-2 text-sm text-text-tertiary hover:text-text-secondary transition-colors">Cancel</Link>
           </div>
         </form>
       </div>

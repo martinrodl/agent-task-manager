@@ -294,11 +294,11 @@ export async function runAgent(taskId: string, agentName: string): Promise<void>
     ? '\n\n---\n## Skills\n\n' + agentConfig.skills.map(as => as.skill.content).join('\n\n---\n\n')
     : ''
 
-  // Build env vars section (appended to user prompt)
+  // Build env vars section (appended to user prompt — values are available via bash_run env)
   const envVarsSection = agentConfig.envVars.length > 0
-    ? '\n## Available credentials\n' +
+    ? '\n## Available credentials\nThese are injected as environment variables in your bash_run tool. Reference them as $KEY_NAME.\n' +
       agentConfig.envVars.map(ae =>
-        `  - ${ae.envVar.key}${ae.envVar.description ? ` — ${ae.envVar.description}` : ''}: ${ae.envVar.value}`
+        `  - ${ae.envVar.key}${ae.envVar.description ? ` — ${ae.envVar.description}` : ''}`
       ).join('\n') + '\n'
     : ''
 

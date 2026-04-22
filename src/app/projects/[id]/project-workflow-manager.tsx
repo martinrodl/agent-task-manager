@@ -34,7 +34,7 @@ export function ProjectWorkflowManager({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1"
+        className="text-sm text-text-secondary hover:text-accent flex items-center gap-1"
       >
         + Assign existing workflow to this project
       </button>
@@ -42,11 +42,11 @@ export function ProjectWorkflowManager({
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+    <div className="card p-4 flex items-center gap-3">
       <select
         value={selected}
         onChange={e => setSelected(e.target.value)}
-        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="input-field flex-1"
       >
         <option value="">Select a workflow…</option>
         {unassignedWorkflows.map(wf => (
@@ -56,11 +56,11 @@ export function ProjectWorkflowManager({
       <button
         onClick={assign}
         disabled={!selected || loading}
-        className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        className="px-3 py-2 bg-accent text-text-inverse text-sm font-display font-medium rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
       >
         {loading ? 'Assigning…' : 'Assign'}
       </button>
-      <button onClick={() => setOpen(false)} className="text-sm text-gray-500 hover:text-gray-700">
+      <button onClick={() => setOpen(false)} className="text-sm text-text-tertiary hover:text-text-primary transition-colors">
         Cancel
       </button>
     </div>

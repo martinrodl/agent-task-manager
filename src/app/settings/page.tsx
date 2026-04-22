@@ -120,42 +120,42 @@ export default function SettingsPage() {
   return (
     <div className="flex h-full">
       <Nav reviewCount={reviewCount} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto bg-surface-0">
         <div className="max-w-3xl mx-auto p-8">
-          <h1 className="text-xl font-bold text-gray-900 mb-1">Settings</h1>
-          <p className="text-sm text-gray-500 mb-8">Global configuration for the AgentTask platform.</p>
+          <h1 className="text-xl font-bold text-text-primary mb-1">Settings</h1>
+          <p className="text-sm text-text-secondary mb-8">Global configuration for the AgentTask platform.</p>
 
           {/* AI Providers section */}
           <div className="mb-2 flex items-center justify-between">
             <div>
-              <h2 className="font-semibold text-gray-900">✨ AI Providers</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Used by the AI assistant buttons in Workflow Builder and Skills editor.</p>
+              <h2 className="font-semibold text-text-primary">✨ AI Providers</h2>
+              <p className="text-sm text-text-secondary mt-0.5">Used by the AI assistant buttons in Workflow Builder and Skills editor.</p>
             </div>
-            <button onClick={openNew} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+            <button onClick={openNew} className="px-4 py-2 bg-accent text-text-inverse text-sm font-medium rounded-lg hover:shadow-glow">
               + Add provider
             </button>
           </div>
 
           {/* Form */}
           {editing && (
-            <div className="bg-white border-2 border-blue-200 rounded-xl p-5 mt-4 mb-4 space-y-4">
-              <h3 className="font-semibold text-gray-900">{editing === 'new' ? 'New AI provider' : 'Edit provider'}</h3>
+            <div className="bg-surface-1 border-2 border-accent/20 rounded-xl p-5 mt-4 mb-4 space-y-4">
+              <h3 className="font-semibold text-text-primary">{editing === 'new' ? 'New AI provider' : 'Edit provider'}</h3>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Display name <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">Display name <span className="text-err">*</span></label>
                   <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="Anthropic Claude"
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">Provider</label>
                   <select value={form.provider}
                     onChange={e => {
                       const p = PROVIDERS.find(p => p.value === e.target.value)
                       setForm(f => ({ ...f, provider: e.target.value, baseUrl: p?.urlPlaceholder ?? '', model: MODEL_SUGGESTIONS[e.target.value]?.[0] ?? '' }))
                     }}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent">
                     {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                 </div>
@@ -163,13 +163,13 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Model <span className="text-red-500">*</span>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                    Model <span className="text-err">*</span>
                   </label>
                   <input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
                     placeholder="claude-opus-4-6"
                     list="model-suggestions"
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent" />
                   <datalist id="model-suggestions">
                     {suggestions.map(s => <option key={s} value={s} />)}
                   </datalist>
@@ -178,7 +178,7 @@ export default function SettingsPage() {
                       {suggestions.map(s => (
                         <button key={s} onClick={() => setForm(f => ({ ...f, model: s }))}
                           className={`text-xs px-1.5 py-0.5 rounded border transition-colors
-                            ${form.model === s ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                            ${form.model === s ? 'bg-accent/10 text-accent border-accent/30' : 'bg-surface-0 text-text-secondary border-border hover:border-border-strong'}`}>
                           {s}
                         </button>
                       ))}
@@ -186,25 +186,25 @@ export default function SettingsPage() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    API Key {PROVIDERS.find(p => p.value === form.provider)?.needsKey && <span className="text-red-500">*</span>}
+                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                    API Key {PROVIDERS.find(p => p.value === form.provider)?.needsKey && <span className="text-err">*</span>}
                   </label>
                   <input type="password" value={form.apiKey} onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))}
                     placeholder={editing !== 'new' ? '(unchanged)' : 'sk-ant-... / sk-... / ghp_...'}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
               </div>
 
               {form.provider !== 'anthropic' && form.provider !== 'openai' && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                  <label className="block text-xs font-medium text-text-secondary mb-1">
                     {form.provider === 'claude-code' ? 'Path to claude binary' : 'Base URL'}
                   </label>
                   <input value={form.baseUrl} onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value }))}
                     placeholder={PROVIDERS.find(p => p.value === form.provider)?.urlPlaceholder ?? ''}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-1.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent" />
                   {form.provider === 'claude-code' && (
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-xs text-text-tertiary mt-0.5">
                       Leave blank to use <code>claude</code> from PATH. The agent will run in the workflow&apos;s workspace directory.
                     </p>
                   )}
@@ -222,27 +222,27 @@ export default function SettingsPage() {
                 </label>
               </div>
 
-              {error && <p className="text-sm text-red-600">{error}</p>}
+              {error && <p className="text-sm text-err">{error}</p>}
 
               {formTestResult && (
-                <div className={`text-sm px-3 py-2 rounded-lg ${formTestResult.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                <div className={`text-sm px-3 py-2 rounded-lg ${formTestResult.ok ? 'bg-ok/[0.06] text-ok' : 'bg-err-dim text-err'}`}>
                   {formTestResult.msg}
                 </div>
               )}
 
               <div className="flex gap-2">
-                <button onClick={save} disabled={saving} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                <button onClick={save} disabled={saving} className="px-4 py-2 bg-accent text-text-inverse text-sm font-medium rounded-lg hover:shadow-glow disabled:opacity-50">
                   {saving ? 'Saving…' : 'Save'}
                 </button>
                 <button
                   type="button"
                   onClick={testFormProvider}
                   disabled={formTesting}
-                  className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  className="px-4 py-2 text-sm border border-border text-text-secondary rounded-lg hover:bg-surface-2 disabled:opacity-50"
                 >
                   {formTesting ? 'Testing…' : '🔌 Test connection'}
                 </button>
-                <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancel</button>
+                <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary">Cancel</button>
               </div>
             </div>
           )}
@@ -250,41 +250,41 @@ export default function SettingsPage() {
           {/* Provider list */}
           <div className="mt-4 space-y-3">
             {providers.length === 0 && !editing ? (
-              <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+              <div className="bg-surface-1 rounded-xl border border-border p-10 text-center">
                 <p className="text-3xl mb-2">✨</p>
-                <p className="text-gray-500 mb-1">No AI providers configured.</p>
-                <p className="text-sm text-gray-400">Add an Anthropic, OpenAI, or other provider to enable AI assistance in the app.</p>
+                <p className="text-text-secondary mb-1">No AI providers configured.</p>
+                <p className="text-sm text-text-tertiary">Add an Anthropic, OpenAI, or other provider to enable AI assistance in the app.</p>
               </div>
             ) : providers.map(p => {
               const tr = testResult[p.id]
               return (
-                <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div key={p.id} className="bg-surface-1 rounded-xl border border-border p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${p.enabled ? 'bg-green-400' : 'bg-gray-300'}`} />
+                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${p.enabled ? 'bg-ok' : 'bg-surface-2'}`} />
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900">{p.name}</span>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{providerLabel(p.provider)}</span>
-                          {p.isDefault && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">default</span>}
-                          {!p.enabled && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">disabled</span>}
+                          <span className="font-semibold text-text-primary">{p.name}</span>
+                          <span className="text-xs bg-surface-2 text-text-secondary px-2 py-0.5 rounded-full">{providerLabel(p.provider)}</span>
+                          {p.isDefault && <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full">default</span>}
+                          {!p.enabled && <span className="text-xs bg-warn-dim text-warn px-2 py-0.5 rounded-full">disabled</span>}
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5 font-mono">{p.model}</p>
+                        <p className="text-xs text-text-tertiary mt-0.5 font-mono">{p.model}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button onClick={() => testProvider(p)} disabled={testing === p.id}
-                        className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                        className="px-3 py-1.5 text-xs border border-border text-text-secondary rounded-lg hover:bg-surface-2 disabled:opacity-50">
                         {testing === p.id ? 'Testing…' : 'Test'}
                       </button>
                       <button onClick={() => openEdit(p)}
-                        className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">Edit</button>
+                        className="px-3 py-1.5 text-xs border border-border text-text-secondary rounded-lg hover:bg-surface-2">Edit</button>
                       <button onClick={() => deleteProvider(p.id)}
-                        className="px-3 py-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg">Delete</button>
+                        className="px-3 py-1.5 text-xs text-err hover:text-err hover:bg-err-dim rounded-lg">Delete</button>
                     </div>
                   </div>
                   {tr && (
-                    <div className={`mt-2 text-xs px-3 py-2 rounded-lg ${tr.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    <div className={`mt-2 text-xs px-3 py-2 rounded-lg ${tr.ok ? 'bg-ok/[0.06] text-ok' : 'bg-err-dim text-err'}`}>
                       {tr.msg}
                     </div>
                   )}

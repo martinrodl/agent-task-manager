@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Nav } from '@/components/nav'
 import { formatDate, priorityLabel, priorityColor } from '@/lib/utils'
 import Link from 'next/link'
+import { CheckCircle, ShieldAlert } from 'lucide-react'
 
 interface HumanTransition { id: string; name: string; label: string; requiresComment: boolean; toState: { name: string; label: string; color: string } }
 interface TaskItem {
@@ -34,9 +35,12 @@ export default function ReviewPage() {
 
   useEffect(() => {
     load()
-    // SSE for live updates
     const es = new EventSource('/api/v1/stream/tasks')
     es.addEventListener('task_updated', () => load())
+    es.onerror = () => {
+      es.close()
+      setTimeout(() => load(), 5_000)
+    }
     return () => es.close()
   }, [load])
 
@@ -68,25 +72,27 @@ export default function ReviewPage() {
   return (
     <div className="flex h-full">
       <Nav reviewCount={tasks.length} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto bg-surface-0">
         <div className="max-w-4xl mx-auto p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Review queue</h1>
-              <p className="text-sm text-gray-500 mt-0.5">Tasks waiting for human approval (HITL checkpoints)</p>
+              <p className="font-display text-xs font-semibold text-text-tertiary uppercase tracking-[0.2em] mb-1">HITL Checkpoints</p>
+              <h1 className="font-display text-2xl font-bold text-text-primary tracking-tight">Review queue</h1>
+              <p className="text-sm text-text-secondary mt-0.5">Tasks waiting for human approval</p>
             </div>
-            <span className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-medium">
+            <span className="badge-warn">
+              <ShieldAlert className="w-3 h-3" />
               {tasks.length} pending
             </span>
           </div>
 
           {loading ? (
-            <p className="text-gray-500">Loading…</p>
+            <p className="text-text-secondary">Loading…</p>
           ) : tasks.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-              <div className="text-4xl mb-3">✅</div>
-              <p className="font-medium text-gray-900">Queue is empty</p>
-              <p className="text-sm text-gray-500 mt-1">No tasks waiting for review.</p>
+            <div className="card p-12 text-center">
+              <CheckCircle className="w-10 h-10 text-ok mx-auto mb-3" />
+              <p className="font-display font-semibold text-text-primary">Queue is empty</p>
+              <p className="text-sm text-text-secondary mt-1">No tasks waiting for review.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -94,36 +100,39 @@ export default function ReviewPage() {
                 const lastComment = task.events[0]?.comment
                 const lastActor   = task.events[0]?.actor
                 return (
-                  <div key={task.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div key={task.id} className="card overflow-hidden">
                     {/* Header */}
                     <div className="flex items-start justify-between p-5 pb-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: task.state.color + '20', color: task.state.color }}>
+                          <span
+                            className="text-[10px] font-display font-medium px-2 py-0.5 rounded-full uppercase tracking-wider"
+                            style={{ backgroundColor: task.state.color + '20', color: task.state.color }}
+                          >
                             {task.state.label}
                           </span>
-                          <span className="text-xs text-gray-400">{task.workflow.name}</span>
+                          <span className="text-xs text-text-tertiary">{task.workflow.name}</span>
                           <span className={`text-xs font-medium ${priorityColor(task.priority)}`}>{priorityLabel(task.priority)}</span>
                         </div>
-                        <Link href={`/tasks/${task.id}`} className="font-semibold text-gray-900 hover:underline block truncate">{task.title}</Link>
-                        {task.description && <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{task.description}</p>}
+                        <Link href={`/tasks/${task.id}`} className="font-semibold text-text-primary hover:text-accent block truncate transition-colors">{task.title}</Link>
+                        {task.description && <p className="text-sm text-text-secondary mt-0.5 line-clamp-2">{task.description}</p>}
                       </div>
-                      <span className="text-xs text-gray-400 shrink-0 ml-4">Waiting {formatDate(task.updatedAt)}</span>
+                      <span className="text-xs text-text-tertiary shrink-0 ml-4">{formatDate(task.updatedAt)}</span>
                     </div>
 
                     {/* Agent's submission comment */}
                     {lastComment && (
-                      <div className="mx-5 mb-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                        <p className="text-xs text-blue-600 font-medium mb-0.5">Agent note ({lastActor})</p>
-                        <p className="text-sm text-blue-800">{lastComment}</p>
+                      <div className="mx-5 mb-3 p-3 bg-accent/[0.06] rounded-lg border border-accent/20">
+                        <p className="text-[10px] text-accent font-display font-medium mb-0.5 uppercase tracking-wider">Agent note ({lastActor})</p>
+                        <p className="text-sm text-text-primary">{lastComment}</p>
                       </div>
                     )}
 
                     {/* Result */}
                     {task.result && (
-                      <div className="mx-5 mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-xs text-gray-500 font-medium mb-1">Agent result</p>
-                        <pre className="text-xs font-mono text-gray-700 overflow-auto max-h-32">{JSON.stringify(task.result, null, 2)}</pre>
+                      <div className="mx-5 mb-3 p-3 bg-surface-2 rounded-lg border border-border">
+                        <p className="text-[10px] text-text-tertiary font-display font-medium mb-1 uppercase tracking-wider">Agent result</p>
+                        <pre className="text-xs font-mono text-text-secondary overflow-auto max-h-32">{JSON.stringify(task.result, null, 2)}</pre>
                       </div>
                     )}
 
@@ -135,11 +144,11 @@ export default function ReviewPage() {
                           onChange={e => setComment(prev => ({ ...prev, [task.id]: e.target.value }))}
                           placeholder="Comment…"
                           rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                          className="input-field mb-2 text-sm resize-none"
                         />
                       )}
 
-                      {error[task.id] && <p className="text-xs text-red-600 mb-2">{error[task.id]}</p>}
+                      {error[task.id] && <p className="text-xs text-err mb-2">{error[task.id]}</p>}
 
                       <div className="flex flex-wrap gap-2">
                         {task.humanTransitions.map(t => {
@@ -149,10 +158,10 @@ export default function ReviewPage() {
                               key={t.name}
                               onClick={() => doTransition(task.id, t)}
                               disabled={pending === `${task.id}:${t.name}`}
-                              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${
+                              className={`px-3 py-1.5 text-sm font-display font-medium rounded-lg transition-all duration-200 disabled:opacity-50 ${
                                 isApprove
-                                  ? 'bg-green-600 text-white hover:bg-green-700'
-                                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                  ? 'bg-ok text-text-inverse shadow-sm hover:shadow-md active:scale-[0.98]'
+                                  : 'bg-surface-2 border border-border text-text-secondary hover:text-text-primary hover:border-border-strong'
                               }`}
                             >
                               {pending === `${task.id}:${t.name}` ? 'Processing…' : t.label}
@@ -160,7 +169,7 @@ export default function ReviewPage() {
                             </button>
                           )
                         })}
-                        <Link href={`/tasks/${task.id}`} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 border border-transparent">
+                        <Link href={`/tasks/${task.id}`} className="px-3 py-1.5 text-sm text-text-tertiary hover:text-accent transition-colors">
                           View details →
                         </Link>
                       </div>

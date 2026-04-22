@@ -1,11 +1,19 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 import { prisma } from './prisma'
 
-const secret = () => new TextEncoder().encode(
-  process.env.SECRET_KEY ?? 'fallback-secret-change-me'
-)
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+}
+
+const secret = () => {
+  const key = process.env.SECRET_KEY
+  if (!key) throw new Error('SECRET_KEY environment variable is required')
+  return new TextEncoder().encode(key)
+}
 
 export type ActorType = 'human' | 'agent' | 'orchestrator'
 
@@ -34,7 +42,9 @@ export async function verifySessionToken(token: string): Promise<boolean> {
 }
 
 export async function verifyPassword(password: string): Promise<boolean> {
-  return password === (process.env.ADMIN_PASSWORD ?? 'admin')
+  const adminPw = process.env.ADMIN_PASSWORD
+  if (!adminPw) throw new Error('ADMIN_PASSWORD environment variable is required')
+  return safeEqual(password, adminPw)
 }
 
 // ─── Server-side session read ─────────────────────────────────────────────────
@@ -68,11 +78,11 @@ export async function resolveActor(req: NextRequest): Promise<AuthContext | null
     const orchKey  = process.env.ORCHESTRATOR_API_KEY ?? ''
     const agentKey = process.env.AGENT_API_KEY ?? ''
 
-    if (orchKey && key === orchKey) {
+    if (orchKey && safeEqual(key, orchKey)) {
       const agentId = req.headers.get('x-agent-id') ?? 'orchestrator'
       return { actor: agentId, actorType: 'orchestrator' }
     }
-    if (agentKey && key === agentKey) {
+    if (agentKey && safeEqual(key, agentKey)) {
       const agentId = req.headers.get('x-agent-id') ?? 'agent'
       return { actor: agentId, actorType: 'agent' }
     }

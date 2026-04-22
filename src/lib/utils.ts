@@ -17,11 +17,11 @@ export function priorityLabel(p: number) {
 }
 
 export function priorityColor(p: number) {
-  return ['text-gray-400', 'text-blue-500', 'text-amber-500', 'text-red-500'][p] ?? 'text-gray-400'
+  return ['text-text-tertiary', 'text-accent', 'text-warn', 'text-err'][p] ?? 'text-text-tertiary'
 }
 
 export function priorityBorderColor(p: number) {
-  return ['border-gray-300', 'border-blue-400', 'border-amber-400', 'border-red-500'][p] ?? 'border-gray-300'
+  return ['border-border', 'border-accent/50', 'border-warn/50', 'border-err/50'][p] ?? 'border-border'
 }
 
 export function timeAgo(date: Date | string): string {

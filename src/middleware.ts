@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
+import { timingSafeEqual } from 'crypto'
 
-const secret = () => new TextEncoder().encode(
-  process.env.SECRET_KEY ?? 'fallback-secret-change-me'
-)
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+}
+
+const secret = () => {
+  const key = process.env.SECRET_KEY
+  if (!key) throw new Error('SECRET_KEY environment variable is required')
+  return new TextEncoder().encode(key)
+}
 
 async function isValidSession(token: string | undefined): Promise<boolean> {
   if (!token) return false
@@ -25,8 +33,8 @@ function isValidApiKey(authHeader: string | null): boolean {
   // Env-var keys are validated here (no DB available in middleware).
   // Per-agent DB tokens are validated later in resolveActor() inside the route handler.
   // Any non-empty Bearer token is allowed through; resolveActor returns null if invalid.
-  if ((!!agentKey && key === agentKey) || (!!orchKey && key === orchKey)) return true
-  // Unknown token — let it through; the route handler will reject if not in DB
+  if ((!!agentKey && safeEqual(key, agentKey)) || (!!orchKey && safeEqual(key, orchKey))) return true
+  // Unknown token — may be a per-agent DB token; let through to resolveActor() in route handler
   return true
 }
 
